@@ -1,4 +1,4 @@
-== Geocaching-Scripts ==
+# Geocaching-Scripts 
 
 Various scripts to manage geocaching activities on the web site
 
