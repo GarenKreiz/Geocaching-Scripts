@@ -553,16 +553,22 @@ gc_getopts() {
     CMDPIPE=
     BOOKMARK=
     POCKETQUERY=
-    FILEPICTURES=
+    FILEPICTURE=
     LOGID=
+    CAPTIONPICTURE=
+    DATEPICTURE=
+    LISTPICTURES=
 
-    while getopts "D:f:l:" opt
+    while getopts "D:p:l:c:d:f:" opt
     do
 	case $opt in
-	f)      FILEPICTURES="$OPTARG";;
-	l)      LOGID="$OPTARG";;
-	D)	DEBUG="$OPTARG";;
-	h|\?|-)	usage;;
+	    f)      LISTPICTURES="$OPTARG";;
+	    p)      FILEPICTURE="$OPTARG";;
+	    l)      LOGID="$OPTARG";;
+	    c)      CAPTIONPICTURE="$OPTARG";;
+	    d)      DATEPICTURE="$OPTARG";;
+	    D)	    DEBUG="$OPTARG";;
+	    h|\?|-) usage;;
 	esac
     done
     shiftamt=`expr $OPTIND - 1`
@@ -2278,67 +2284,105 @@ if [ "$BYUSER" = "$USERNAME" ]; then
 fi
 
 #
-#	Uplog pictures
+# upload an image with title and set the date
 #
-upload_pictures() {
-    echo "LogID=" $LOGID "FilePictures=" $FILEPICTURES
+upload_image() {
+
+    FILEPICTURE="$1"
+    CAPTIONPICTURE="$2"
+    DATEPICTURE="$3"
+    DESCRIPTIONPICTURE="$4"
+
     
-    if [ $DEBUG -gt 0 ]; then
-	TMP=/tmp/geo
-    else
-	TMP=/tmp/geo$$
-    fi
+    echo ==== Uploading image $FILEPICTURE $CAPTIONPICTURE $DATEPICTURE
 
-    HTMLPAGE=$TMP.page
-    CIDFILE=$TMP.cids
-    LOCFILE=$TMP.loc
-    LOCTMPFILE=$TMP.tmp
-    XTRAFILE=$TMP.xtra
-    CSVFILE=$TMP.csv
-    CSVFILE2=$TMP.csv2
-    JOINFILE=$TMP.join
-    MERGEFILE=$TMP.merge
-    ARCHFILE=$TMP.arch
-    OUTWAY=$TMP.way
-    STYLE=$TMP.newstyle
+    get_value __VIEWSTATE $HTMLPAGE
+    echo $__VIEWSTATE
+    
+    curl $CURL_OPTS -L -s -b $COOKIE_FILE -A "$UA" \
+	-v --trace trace_upload.txt \
+	-F "__EVENTTARGET=" \
+	-F "__EVENTARGUMENT=" \
+	-F "__VIEWSTATE=$__VIEWSTATE" \
+	-F "__VIEWSTATEGENERATOR=$__VIEWSTATEGENERATOR" \
+	-F "ctl00\$ContentBody\$ImageUploadControl1\$uxFileUpload=@$FILEPICTURE;type=image/jpeg" \
+	-F "ctl00\$ContentBody\$ImageUploadControl1\$uxFileCaption=$CAPTIONPICTURE" \
+	-F "ctl00\$ContentBody\$ImageUploadControl1\$uxFileDesc=$DESCRIPTIONPICTURE" \
+	-F "ctl00\$ContentBody\$ImageUploadControl1\$uxUpload=Upload" \
+        "$URL" > $HTMLPAGE
 
-    CRUFT="$CRUFT $HTMLPAGE"
-    CRUFT="$CRUFT $CIDFILE"
-    CRUFT="$CRUFT $LOCFILE"
-    CRUFT="$CRUFT $LOCTMPFILE"
-    CRUFT="$CRUFT $XTRAFILE"
-    CRUFT="$CRUFT $CSVFILE"
-    CRUFT="$CRUFT $CSVFILE2"
-    CRUFT="$CRUFT $JOINFILE"
-    CRUFT="$CRUFT $MERGEFILE"
-    CRUFT="$CRUFT $ARCHFILE"
-    CRUFT="$CRUFT $OUTWAY"
-    CRUFT="$CRUFT $STYLE"
-    if [ $NOCOOKIES = 1 ]; then
-	CRUFT="$CRUFT $COOKIE_FILE"
-    fi
+    cp $HTMLPAGE geo_upload_$RANDOM.html
+    cp $COOKIE_FILE cookie_upload_$RANDOM
+    
+    # https://www.geocaching.com/seek/limage.aspx?imgid=36123418&LID=648267239
+    URL=`grep uxEditImg $HTMLPAGE | sed 's/.*href="//' | sed 's/">.*//' | sed 's/.amp;/\&/'`
 
+    echo ====== "Modify:" $URL
+    
+    curl $CURL_OPTS -L -s -b $COOKIE_FILE -A "$UA" \
+	-v --trace trace_modify_image.txt \
+	"$URL" > $HTMLPAGE
+    
+    cp $HTMLPAGE geo_modify_image_$RANDOM.html
+    cp $COOKIE_FILE cookie_modify_image_$RANDOM
+
+    echo ==== Editing image
+  
+    gc_getviewstate $HTMLPAGE
+    #print "Viewstate=" $viewstate
+    sleep 2
+    curl $CURL_OPTS -L -s -b $COOKIE_FILE -A "$UA" \
+	 -v --trace trace_modify_details.txt \
+    	 $viewstate \
+	 -d "__VIEWSTATEGENERATOR=$__VIEWSTATEGENERATOR" \
+	 -d "__EVENTTARGET=ctl00\$ContentBody\$ImageEditPanel1\$btnEditTxt" \
+	 -d "__EVENTARGUMENT=" \
+	"$URL" > $HTMLPAGE
+
+    cp $HTMLPAGE geo_modify_details_$RANDOM.html
+    cp $COOKIE_FILE cookie_modify_details_$RANDOM
+
+    echo ==== Sending form
+  
+    gc_getviewstate $HTMLPAGE
+    #print "Viewstate=" $viewstate
+    sleep 2
+
+    echo ============ $DATEPICTURE
+    setDate=`echo $DATEPICTURE | sed 's,\(....\)/\(..\)/\(..\),Year=\1 ; Month=\2 ; Day=\3,'`
+    eval $setDate
+    echo $Year $Month $Day
+    curl $CURL_OPTS -L -s -b $COOKIE_FILE -A "$UA" \
+	 -v --trace trace_form.txt \
+	 -d "__EVENTTARGET=" \
+	 -d "__EVENTARGUMENT=" \
+	 -d "__LASTFOCUS=" \
+    	 $viewstate \
+	 -d "__VIEWSTATEGENERATOR=$__VIEWSTATEGENERATOR" \
+	 -d "ctl00\$ContentBody\$ImageEditPanel1\$tbName=$CAPTIONPICTURE" \
+	 -d "ctl00\$ContentBody\$ImageEditPanel1\$tbDateTimeTaken=September/01/2016" \
+	 -d "ctl00\$ContentBody\$ImageEditPanel1\$tbDateTimeTaken\$Month=$Month" \
+	 -d "ctl00\$ContentBody\$ImageEditPanel1\$tbDateTimeTaken\$Day=$Day" \
+	 -d "ctl00\$ContentBody\$ImageEditPanel1\$tbDateTimeTaken\$Year=$Year" \
+	 -d "ctl00\$ContentBody\$ImageEditPanel1\$tbNote=$DESCRIPTIONPICTURE" \
+	 -d "ctl00\$ContentBody\$ImageEditPanel1\$btnEdit=Modifier+les+détails" \
+	"$URL" > $HTMLPAGE
+
+    cp $HTMLPAGE geo_form_$RANDOM.html
+    cp $COOKIE_FILE cookie_form_$RANDOM
+    
+}
+
+#
+# load the web page of a geocaching log
+#
+goto_log() {
     #
-    #	Login to gc.com
+    # Fetch the page of a log 
     #
-    gc_login "$USERNAME" "$PASSWORD"
 
-    if [ $DEBUG -gt 0 ]; then
-	filter2="tee $TMP.bulk"
-    else
-	filter2=cat
-    fi
-
-    subscriber=1
-    > $XTRAFILE
-    > $ARCHFILE
-    ((start=0))
-
-    sleep $GEOSLEEP
-
-    #
-    # Fetch the page of closest caches and scrape the cache ID's
-    #
+    echo "==== Uploading for log" $1
+    LOGID="$1"
     
     URL="$GEO/seek/log.aspx?LUID=$LOGID"
 
@@ -2384,10 +2428,8 @@ upload_pictures() {
     
     # cp $HTMLPAGE /tmp/view$start.html
 
-    #
-    # Grab the CIDs into two categories: found and notfound
-    #
     cp $HTMLPAGE geo_$RANDOM.html
+    cp $COOKIE_FILE cookie_$RANDOM
 
     LID=`grep "seek/upload.aspx?LID" $HTMLPAGE | sed 's,.*seek/upload.aspx,seek/upload.aspx,' | sed 's/".*//'` 
 
@@ -2396,7 +2438,6 @@ upload_pictures() {
     URL="$GEOS/$LID"
 
     debug 1 "$start: curl $URL "
-    cp $COOKIE_FILE cookie_$RANDOM
 
     curl $CURL_OPTS -L -s -b $COOKIE_FILE -A "$UA" -v \
         "$URL" \
@@ -2406,86 +2447,107 @@ upload_pictures() {
     cp $COOKIE_FILE cookie_log_$RANDOM
 
     sleep 2
-    
-    echo ==== Uploading image
     gc_getviewstate $HTMLPAGE
 
     echo $__VIEWSTATEGENERATOR
 
-    echo "ctl00\$ContentBody\$ImageUploadControl1\$uxFileUpload=@$FILEPICTURES;type=image/jpeg"
-    get_value __VIEWSTATE $HTMLPAGE
-    echo $__VIEWSTATE
-    
-    curl $CURL_OPTS -L -s -b $COOKIE_FILE -A "$UA" \
-	-v --trace trace_upload.txt \
-	-F "__EVENTTARGET=" \
-	-F "__EVENTARGUMENT=" \
-	-F "__VIEWSTATE=$__VIEWSTATE" \
-	-F "__VIEWSTATEGENERATOR=$__VIEWSTATEGENERATOR" \
-	-F "ctl00\$ContentBody\$ImageUploadControl1\$uxFileUpload=@$FILEPICTURES;type=image/jpeg" \
-	-F "ctl00\$ContentBody\$ImageUploadControl1\$uxFileCaption=Big Cache 1" \
-	-F "ctl00\$ContentBody\$ImageUploadControl1\$uxFileDesc=" \
-	-F "ctl00\$ContentBody\$ImageUploadControl1\$uxUpload=Upload" \
-        "$URL" > $HTMLPAGE
+}
 
-    cp $HTMLPAGE geo_upload_$RANDOM.html
-    cp $COOKIE_FILE cookie_upload_$RANDOM
+process_file() {
+
+    echo "==== Processing file" $1
+    cp $1 listeImages_$RANDOM.txt
+    LOGID="__DUMMY__"
+    cat $1 | \
+	while read i ; do
+	    D=""
+	    evalString=`echo $i | sed 's/\(.*\)|\(.*\)|\(.*\)|\(.*\)|\(.*\)/D="\1" ; L="\2" ; P="\3" ; C="\4" ; DD="\5" ;/'`
+	    echo $evalString
+	    eval $evalString
+	    if [ "$D" = "" ] ; then
+		exit
+	    fi
+	    #if [ "$L" != "$LOGID" ] ; then
+	    #	LOGID=$L
+	    #	goto_log "$LOGID"		
+	    #fi
+	    goto_log "$L"
+	    
+	    test -f "$P" && upload_image "$P" "$C" "$D" "$DD"
+
+	done
+}
+#
+#	Upload pictures
+#
+upload_pictures() {
+    echo ==== Uploading picture $FILEPICTURES $LOGID $FILEPICTURE $CAPTIONPICTURE $DATEPICTURE
+
+    if [ $DEBUG -gt 0 ]; then
+	TMP=/tmp/geo
+    else
+	TMP=/tmp/geo$$
+    fi
+
+    HTMLPAGE=$TMP.page
+    CIDFILE=$TMP.cids
+    LOCFILE=$TMP.loc
+    LOCTMPFILE=$TMP.tmp
+    XTRAFILE=$TMP.xtra
+    CSVFILE=$TMP.csv
+    CSVFILE2=$TMP.csv2
+    JOINFILE=$TMP.join
+    MERGEFILE=$TMP.merge
+    ARCHFILE=$TMP.arch
+    OUTWAY=$TMP.way
+    STYLE=$TMP.newstyle
+
+    CRUFT="$CRUFT $HTMLPAGE"
+    CRUFT="$CRUFT $CIDFILE"
+    CRUFT="$CRUFT $LOCFILE"
+    CRUFT="$CRUFT $LOCTMPFILE"
+    CRUFT="$CRUFT $XTRAFILE"
+    CRUFT="$CRUFT $CSVFILE"
+    CRUFT="$CRUFT $CSVFILE2"
+    CRUFT="$CRUFT $JOINFILE"
+    CRUFT="$CRUFT $MERGEFILE"
+    CRUFT="$CRUFT $ARCHFILE"
+    CRUFT="$CRUFT $OUTWAY"
+    CRUFT="$CRUFT $STYLE"
+    if [ $NOCOOKIES = 1 ]; then
+	CRUFT="$CRUFT $COOKIE_FILE"
+    fi
 
 
-    
-    # https://www.geocaching.com/seek/limage.aspx?imgid=36123418&LID=648267239
-    URL=`grep uxEditImg $HTMLPAGE | sed 's/.*href="//' | sed 's/">.*//' | sed 's/.amp;/\&/'`
+    #
+    #	Login to gc.com
+    #
+    gc_login "$USERNAME" "$PASSWORD"
 
-    echo ====== "Modify:" $URL
-    
-    curl $CURL_OPTS -L -s -b $COOKIE_FILE -A "$UA" \
-	-v --trace trace_modify_image.txt \
-	"$URL" > $HTMLPAGE
-    
-    cp $HTMLPAGE geo_modify_image_$RANDOM.html
-    cp $COOKIE_FILE cookie_modify_image_$RANDOM
+    if [ $DEBUG -gt 0 ]; then
+	filter2="tee $TMP.bulk"
+    else
+	filter2=cat
+    fi
 
-    echo ==== Editing image
-  
-    gc_getviewstate $HTMLPAGE
-    #print "Viewstate=" $viewstate
-    sleep 2
-    curl $CURL_OPTS -L -s -b $COOKIE_FILE -A "$UA" \
-	 -v --trace trace_modify_details.txt \
-    	 $viewstate \
-	 -d "__VIEWSTATEGENERATOR=$__VIEWSTATEGENERATOR" \
-	 -d "__EVENTTARGET=ctl00\$ContentBody\$ImageEditPanel1\$btnEditTxt" \
-	 -d "__EVENTARGUMENT=" \
-	"$URL" > $HTMLPAGE
+    subscriber=1
+    > $XTRAFILE
+    > $ARCHFILE
+    ((start=0))
 
-    cp $HTMLPAGE geo_modify_details_$RANDOM.html
-    cp $COOKIE_FILE cookie_modify_details_$RANDOM
+    sleep $GEOSLEEP
 
-    echo ==== Sending form
-  
-    gc_getviewstate $HTMLPAGE
-    #print "Viewstate=" $viewstate
-    sleep 2
-    
-    curl $CURL_OPTS -L -s -b $COOKIE_FILE -A "$UA" \
-	 -v --trace trace_form.txt \
-	 -d "__EVENTTARGET=" \
-	 -d "__EVENTARGUMENT=" \
-	 -d "__LASTFOCUS=" \
-    	 $viewstate \
-	 -d "__VIEWSTATEGENERATOR=$__VIEWSTATEGENERATOR" \
-	 -d "ctl00\$ContentBody\$ImageEditPanel1\$tbName=BigCache1form" \
-	 -d "ctl00\$ContentBody\$ImageEditPanel1\$tbDateTimeTaken=September/28/2016" \
-	 -d "ctl00\$ContentBody\$ImageEditPanel1\$tbDateTimeTaken\$Month=10" \
-	 -d "ctl00\$ContentBody\$ImageEditPanel1\$tbDateTimeTaken\$Day=28" \
-	 -d "ctl00\$ContentBody\$ImageEditPanel1\$tbDateTimeTaken\$Year=2016" \
-	 -d "ctl00\$ContentBody\$ImageEditPanel1\$tbNote=Grosse+cache+Big+cache" \
-	 -d "ctl00\$ContentBody\$ImageEditPanel1\$btnEdit=Modifier+les+détails" \
-	"$URL" > $HTMLPAGE
+    echo ========= $LISTPICTURES
+    if [ "$LISTPICTURES" != "" ] ; then
 
-    cp $HTMLPAGE geo_form_$RANDOM.html
-    cp $COOKIE_FILE cookie_form_$RANDOM
-    
+	echo === Processing $LISTPICTURES
+	test -f $LISTPICTURES || (echo "No file " $LISTPICTURES ; exit )
+ 	process_file $LISTPICTURES			       
+	exit
+    fi		  
+				       
+    goto_log "$LOGID"
+    upload_image "$FILEPICTURE" "$CAPTIONPICTURE" "$DATEPICTURE" "" 
 }
 
 upload_pictures
