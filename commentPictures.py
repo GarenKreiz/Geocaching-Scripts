@@ -40,14 +40,14 @@ def scanRepertoire(myDate):
 					(newDate,newLogId,newPicture,newComment,newDescription) = l.split('|')
 					lComments[newPicture] = l
 					print l
-		
+	except Exception, msg:
+		list.insert(END,"No comment in directory "+repertoire)
+	try:
 		lImages = glob.glob(repertoire+'/*.jpg')
 		lImages = [ re.sub('\\\\','/',l) for l in lImages ]
 		print "Nb images",len(lImages)
 	except Exception, msg:
-		list.insert(END,"No directory for date")
-		print msg
-		return
+		print "No directory ",repertoire, msg
 	if len(lImages) == 0:
 		list.insert(END,"Empty directory for date")
 		return
@@ -98,9 +98,14 @@ def Quit():
 	root.destroy()
 	
 def ChangePicture(increment):
+	global lImages, nImage
 	if fComment.get() <> '':
 		description = re.sub('\n','\\n',fDescription.get(1.0,END))
-		resu= "%s|%s|%s|%s|%s"%( fDate.get(),fLogId.get(),fPicture.get(),fComment.get(),description)
+		logId = re.sub('.*LUID=','',fLogId.get())
+		fLogId.delete(0,END)
+		fLogId.insert(END,logId)
+		print "LogID:",logId
+		resu= "%s|%s|%s|%s|%s"%( fDate.get(),logId,fPicture.get(),fComment.get(),description)
 		print resu
 		list.insert(END,resu)
 		lComments[fPicture.get()] = resu
@@ -132,7 +137,6 @@ def Save():
 	with codecs.open(repertoire + '/indexImages.txt','w','UTF-8') as fOut:
 		for d in lComments.keys():
 			print lComments[d]
-
 			fOut.write(lComments[d]+'\n')
 		print lComments.values()
 	return
@@ -183,8 +187,8 @@ panel.grid(row=1, columnspan=5,sticky=N,padx=4,pady=4)
 #list.pack()
 list.grid(row=0,columnspan=5,sticky=W+E+N,padx=4,pady=4)
 
+print "Nb images:", len(lImages)
 ChangeDate(myDate)
-displayImage(0)
 
 root.mainloop()
 
