@@ -1,8 +1,8 @@
 #!python
 # -*- coding: utf-8 -*-
 ##############################################################
-# commentPictures.py
-#	add comments to pictures for geocaching logs
+# commentPhoto.py
+#	commentaires sur photos
 #
 
 import os
@@ -28,12 +28,12 @@ def scanRepertoire(myDate):
 
 	(year,month,day) = myDate.split('/')
 	repertoire='Robin_Photos/%s/%s_%s%s'%(year,year,month,day)
-	print myDate, repertoire
+	print "Changing directory:",myDate, repertoire
 	global fOut, lImages
 	fOut = open(repertoire + '/indexImages.txt','w')
 
 	lImages = glob.glob(repertoire+'/*.jpg')
-	print "Nb image",len(lImages)
+	print "Nb images:",len(lImages)
 	if len(lImages) == 0:
 		return
 	lImages.sort()
@@ -41,6 +41,7 @@ def scanRepertoire(myDate):
 idemPattern = re.compile('.*"id')
 
 nImage = 0
+lComments = {}
 
 def displayImage(n):
 	global lImages
@@ -48,15 +49,12 @@ def displayImage(n):
 		print "No image"
 		return
 	path=lImages[n]
-	print len(path), path
 	picture.delete(0,END)
 	picture.insert(0,path)
 	im = Image.open(path)
 	baseheight=500.0
-	print im.size,
 	hpercent=(float(baseheight)/float(im.size[1]))
 	wsize=int(float(im.size[0])*float(hpercent))
-	print hpercent, wsize
 	im.thumbnail((wsize,baseheight), Image.ANTIALIAS)
 	#im.thumbnail((400,300), Image.ANTIALIAS)
 	img = ImageTk.PhotoImage(im)
@@ -75,14 +73,26 @@ def ChangeDate(newDate):
 
 	
 def ChangePicture(increment):
+	global lComments
 	if comment.get() <> '':
 		resu= "%s|%s|%s|%s"%( date.get(),logId.get(),comment.get(),picture.get())
 		print resu
 		list.insert(END,resu)
+		lComments[picture.get()] = resu
 	global lImages,nImage
 	nImage = (nImage+len(lImages)+increment) % len(lImages)
 	displayImage(nImage)
+	try:
+		resu = lComments[picture.get()]
+		print "New resu:",resu,
+		(newDate,newLogId,newComment,_) = resu.split('|')
+		print newLogId,newComment
+		logId.delete(0,END)
+		logId.insert(0,newLogId)
+	except:
+		newComment = ''
 	comment.delete(0,END)
+	comment.insert(0,newComment)
 
 
 def Insert():
