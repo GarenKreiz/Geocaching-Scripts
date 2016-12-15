@@ -9,6 +9,7 @@ import os
 import re
 import sys
 import glob
+import codecs
 import string
 
 from Tkinter import *
@@ -32,19 +33,21 @@ def scanRepertoire(myDate):
 	repertoire='%s/%s_%s%s'%(year,year,month,day)
 	print "Scanning ", myDate, repertoire
 	try:
-		with open(repertoire + '/indexImages.txt','r+') as fIn:
+		with codecs.open(repertoire + '/indexImages.txt','r+') as fIn:
 			for l in fIn:
 				l = l.strip()
+				print l
 				if l <> '':
 					(newDate,newLogId,newPicture,newComment,newDescription) = l.split('|')
 					lComments[newPicture] = l
 					print '.',
 		print ""
 	except Exception, msg:
+		print "Pb opening file", msg
 		list.insert(END,"No comment in directory "+repertoire)
 	try:
 		lImages = glob.glob(repertoire+'/*.jpg')
-		lImages = [ re.sub('\\\\','/',l) for l in lImages ]
+		lImages = [ re.sub('\\\\','/',i) for i in lImages ]
 		print "Nb images",len(lImages)
 	except Exception, msg:
 		print "No directory ",repertoire, msg
@@ -92,8 +95,8 @@ def Quit():
 	print "Saving and closing"
 	try:
 		Save()
-	except:
-		print "Problem while saving"
+	except Exception, msg:
+		print "Problem while saving", msg
 	root.destroy()
 	
 def ChangePicture(increment):
@@ -104,7 +107,9 @@ def ChangePicture(increment):
 		logId = re.sub('.*LUID=','',fLogId.get())
 		fLogId.delete(0,END)
 		fLogId.insert(END,logId)
-		resu= "%s|%s|%s|%s|%s"%( fDate.get(),logId,fPicture.get(),fComment.get(),description)
+		print fPicture.get().decode("latin1")
+		print fComment.get()
+		resu= u"%s|%s|%s|%s|%s"%( fDate.get(),logId,fPicture.get().decode("latin1"),fComment.get(),description)
 		print resu
 		list.insert(END,resu)
 		lComments[fPicture.get()] = resu
@@ -131,8 +136,8 @@ def ChangePicture(increment):
 def Save():
 	global lComments, repertoire
 
-	import codecs
 	print "Saving in directory:", repertoire
+	print lComments
 	with codecs.open(repertoire + '/indexImages.txt','w','UTF-8') as fOut:
 		for d in lComments.keys():
 			print lComments[d]
