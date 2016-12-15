@@ -12,34 +12,34 @@ import glob
 import string
 
 from Tkinter import *
-from PIL import ImageTk, Image
+from PIL import Image, ImageTk
 
-replay = 0
-
+def usage():
+	print "commentPicture AAAA/MM/DD"
+	sys.exit()
+	
 if len(sys.argv) > 1:
 	myDate=sys.argv[1]
+else:
+	usage()
 	
-if len(sys.argv) > 2:
-	if sys.argv[2] == '-r':
-		replay = 1
 lImages=[]
 
 def scanRepertoire(myDate):
 	global fOut, lImages, repertoire
 
 	(year,month,day) = myDate.split('/')
-	repertoire='Robin_Photos/%s/%s_%s%s'%(year,year,month,day)
-	print myDate, repertoire
+	repertoire='%s/%s_%s%s'%(year,year,month,day)
+	print "Scanning ", myDate, repertoire
 	try:
-		print "Scanning directory:",repertoire
 		with open(repertoire + '/indexImages.txt','r+') as fIn:
 			for l in fIn:
 				l = l.strip()
 				if l <> '':
-					print "Split",l.split('|')
 					(newDate,newLogId,newPicture,newComment,newDescription) = l.split('|')
 					lComments[newPicture] = l
-					print l
+					print '.',
+		print ""
 	except Exception, msg:
 		list.insert(END,"No comment in directory "+repertoire)
 	try:
@@ -66,7 +66,6 @@ def displayImage(n):
 		print "No image"
 		return
 	path=lImages[n]
-	print path
 	fPicture.delete(0,END)
 	fPicture.insert(0,path)
 	im = Image.open(path)
@@ -99,12 +98,12 @@ def Quit():
 	
 def ChangePicture(increment):
 	global lImages, nImage
+
 	if fComment.get() <> '':
 		description = re.sub('\n','\\n',fDescription.get(1.0,END))
 		logId = re.sub('.*LUID=','',fLogId.get())
 		fLogId.delete(0,END)
 		fLogId.insert(END,logId)
-		print "LogID:",logId
 		resu= "%s|%s|%s|%s|%s"%( fDate.get(),logId,fPicture.get(),fComment.get(),description)
 		print resu
 		list.insert(END,resu)
@@ -123,7 +122,7 @@ def ChangePicture(increment):
 	except:
 		newComment = ''
 		newDescription = ''
-		print "No comment for",fPicture.get()
+
 	fComment.delete(0,END)
 	fComment.insert(0,newComment)
 	fDescription.delete(1.0,END)
@@ -149,43 +148,51 @@ root.protocol("WM_DELETE_WINDOW", Quit)
 frame=Frame(root,bg = 'RoyalBlue3')
 frame.grid(row=0,columnspan=5,sticky=N+W+E,padx=4,pady=4)
 
+list = Listbox(frame, bg = 'LightBlue3', width=150, fg = 'yellow', height=4)
+list.grid(row=0,columnspan=5,sticky=W+E+N,padx=4,pady=4)
+
 panel = Label(frame)
+panel.grid(row=1, columnspan=5,sticky=N,padx=4,pady=4)
 
 fDate = Entry(frame, bg = 'white', justify = CENTER, width=10)
+fDate.grid(row=2,column=0,sticky=W,padx=4,pady=4)
+
 fLogId = Entry(frame, bg = 'white', justify = CENTER)
+fLogId.grid(row=2,column=1,sticky=W,padx=4,pady=4)
+
 fPicture = Entry(frame,bg = 'white', justify = CENTER, width=52)
+fPicture.grid(row=2,column=2,sticky=W,padx=4,pady=4)
+
 fComment = Entry(frame, bg = 'white', width=40)
+fComment.grid(row=2,column=3,sticky=W+E,padx=4,pady=4)
+
 fDescription = Text(root, bg = 'white', width=100, height=4)
+fDescription.grid(row=2,columnspan=4,rowspan=2, sticky=W+E+S,padx=4,pady=4)
+
+bSave = Button(root, text = "Save", command = Save)
+bSave.grid(row=2,column=4,stick=E,padx=4,pady=4)
 
 bQuit = Button(root, text = "Quit", command = Quit)
-bSave = Button(root, text = "Save", command = Save)
-list = Listbox(frame, bg = 'LightBlue3', width=150, fg = 'yellow', height=4)
+bQuit.grid(row=3,column=4,stick=E,padx=4,pady=4)
 
-fComment.bind("<Return>",(lambda event: ChangePicture(+1)))
+def CallBack(event):
+	print(event.char, event.keysym, event.keycode)
+	
+
 root.bind("<Up>"    ,(lambda event: ChangePicture(-1)))
 root.bind("<Down>"  ,(lambda event: ChangePicture(+1)))
+root.bind("<Next>"  ,(lambda event: ChangePicture(+20)))
+root.bind("<Prior>", (lambda event: ChangePicture(-20)))
 fDate.bind("<Return>",(lambda event: ChangeDate(fDate.get())))
-
+fComment.bind("<Return>",(lambda event: ChangePicture(+1)))
 
 fDate.delete(0,END)
 fDate.insert(0,"2016/10/31")
-fDate.grid(row=2,column=0,sticky=W,padx=4,pady=4)
 lId='9416c723-7a12-40aa-b7e0-d239b5f5a4cc'
 lId='_LogUID_-____-____-____-____________'
-
 fLogId.config(width=len(lId))
 fLogId.delete(0,END)
 fLogId.insert(0,lId)
-fLogId.grid(row=2,column=1,sticky=W,padx=4,pady=4)
-fPicture.grid(row=2,column=2,sticky=W,padx=4,pady=4)
-fComment.grid(row=2,column=3,sticky=W+E,padx=4,pady=4)
-fDescription.grid(row=2,columnspan=4,rowspan=2, sticky=W+E+S,padx=4,pady=4)
-bSave.grid(row=2,column=4,stick=E,padx=4,pady=4)
-bQuit.grid(row=3,column=4,stick=E,padx=4,pady=4)
-#panel.pack(side = "bottom", fill = "both", expand = "yes")
-panel.grid(row=1, columnspan=5,sticky=N,padx=4,pady=4)
-#list.pack()
-list.grid(row=0,columnspan=5,sticky=W+E+N,padx=4,pady=4)
 
 print "Nb images:", len(lImages)
 ChangeDate(myDate)
