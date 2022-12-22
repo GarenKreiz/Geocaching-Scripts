@@ -1,0 +1,50 @@
+#
+# These are the default values for the geo-* series of programs
+# Please edit this file as needed.  Setting values for
+# USERNAME, PASSWORD, LAT/LON, and STATE are required.
+#
+
+#################################
+# Login and paid membership status for www.geocaching.com...
+USERNAME="YOUR_GEOCACHING_USERNAME"
+PASSWORD="YOUR_GEOCACHIGN_PASSWORD"
+# Premium Member (Subscriber) Only Caches set this to a "1"...
+#SOC=0
+
+#################################
+# Your HOME lat/lon and state...
+LAT=N0.0.000
+LON=W0.0.000
+#STATE=MN
+
+#################################
+# Default map scale, font, and source...
+#MAPSCALE=10K
+#MAPFONT=helvetica
+#MAPSRC=2
+#Google Maps API Key, otherwise you will get:
+#	"For development purposes only" on all maps!
+#GMAP_KEY=AAaaAaA0A00AAaAA0AA0aaAAAAAAaaAAAAaa00A
+
+#################################
+# Login for terraserver.com...
+#TSCOM_EMAIL=xxx@yyy.com
+#TSCOM_PW=password
+
+#################################
+# Miscellaneous...
+#OUTFMT=gpsdrive
+#GPSDRIVE_VER=2.09
+#Basic members: Cache the GCxxxxx listing for this many days:
+#CACHE_CACHE_MAX_AGE="1 day"
+#GEOMYSTERY=/c/Users/Kerenoc/.geo-mystery
+#OCMYSTERY=/c/Users/Kerenoc/.oc-mystery
+DATEFMT=1
+#CURL_OPTS="-4"
+#CURL_OPTS="--sslv3"
+
+#################################
+# Login, Email, and password for opencaching.*
+#OK_USERNAME=name
+#OK_EMAIL=name@yyy.com
+#OK_PASSWORD=password
