@@ -1,0 +1,3798 @@
+#!/bin/bash
+#
+#
+#	DO NOT EDIT! This file is generated from geo-demand_new.sh
+#
+
+#
+#	$Id: geo-demand.sh,v 1.114 2017/03/31 20:22:23 rick Exp $
+#
+
+#
+# N.B. currently does not allow you to set a state/country AND latlon/zip/GC
+# at the same time, like the web page does.
+#
+
+PROGNAME="$0"
+
+usage() {
+	cat <<EOF
+NAME
+    `basename $PROGNAME` - Perform a Pocket Query
+
+SYNOPSIS
+    `basename $PROGNAME` [options]
+
+    `basename $PROGNAME` [options] latitude longitude
+
+    `basename $PROGNAME` [options] zipcode
+
+    `basename $PROGNAME` [options] GCxxxx
+
+    `basename $PROGNAME` [options] state [latitude longitude]
+
+    `basename $PROGNAME` [options] country
+
+    `basename $PROGNAME` -o outfmt ....
+
+    `basename $PROGNAME` -k glob-pattern
+
+DESCRIPTION
+    Pocket Query with demand by email mode...
+
+	`basename $PROGNAME` [options]
+	`basename $PROGNAME` [options] latitude longitude
+	`basename $PROGNAME` [options] zipcode
+	`basename $PROGNAME` [options] GCxxxx
+	`basename $PROGNAME` [options] state
+	`basename $PROGNAME` [options] country
+
+	Demand a GPX email of a set of geocaches.
+
+	"state" can be al, ak, ..., wy or "allstates"
+
+	After the query is entered, this script will start a background
+	process that will wait 20 minutes, and then the query will be
+	deleted.  The "-w" option puts that process in the foreground.
+	The "-W" option prevents starting that process at all.
+
+    Instant data delivery mode...
+
+	`basename $PROGNAME` -o outfmt ....
+
+	Any of the command formats above are allowed, and the -o outfmt
+	option must be specified.  In this mode, the data is delivered
+	instantly, just like with geo-nearest, etc.
+
+    Delete (kill) PQ's by name
+
+	`basename $PROGNAME` -k glob-pattern
+
+	Delete (kill) patterns which match glob-pattern by name.
+
+    Requires:
+	- A subscriber login at http://www.geocaching.com.
+	- curl		http://curl.haxx.se/
+
+OPTIONS
+	-d N[+-]	Difficulty level [$DIFF]
+	-t N[+-]	Terrain level [$TERR]
+	-e address	Email results to this address [account email address]
+	-z		Do not unzip the email contents.
+        -n num          Return "num" caches [$NUM]
+        -r radius       Return caches within radius (mi or km) [100mi]
+	-w		Wait for query to be removed.
+	-W		Do not delete query.
+	-T period	Placed within last period (week, month, year)
+	-T mm/dd/yyyy-mm/dd/yyyy	Placed between two dates.
+			Also -mm/dd/yyyy (oldest) and mm/dd/yyyy- (newest)
+	-q qualifiers	Limit by one or more space/comma separated qualifiers:
+
+			Type: these ones OR together....
+			    traditional, multi, virtual, letterbox, event,
+			    mystery, APE, webcam, earth, gps, wherigo
+			Container: these ones OR together....
+			    small, other, none, large, regular, micro, unknown
+			These ones AND together....
+			    ifound, notfound, bug, unfound, notowned,
+			    new, iown, watchlist, updated, active, notactive,
+                            notign, found7, soc, notsoc
+
+	-N name/number	Set the demand query name or number (1-20) [1]
+	-a attributes	Set attribute values.
+
+			[~]scenic, [~]dogs, [~]fee, [~]rappelling, [~]boat, 
+			[~]scuba, [~]kids, [~]onehour, [~]climbing, 
+			[~]wading, [~]swimming, [~]available, [~]night, 
+			[~]winter, [~]cliff, [~]hunting, [~]danger, 
+			[~]wheelchair, [~]camping, [~]bicycles, 
+			[~]motorcycles, [~]quads, [~]jeeps, [~]snowmobiles, 
+			[~]campfires, [~]poisonoak, [~]thorn, 
+			[~]dangerousanimals, [~]ticks, [~]mine, [~]parking, 
+			[~]public, [~]picnic, [~]horses, [~]water, 
+			[~]restrooms, [~]phone, [~]stroller, [~]firstaid, 
+			[~]cow, [~]stealth, [~]landf, [~]flashlight, [~]rv, 
+			[~]uv, [~]snowshoes, [~]skiis, [~]s-tool, 
+			[~]nightcache, [~]parkngrab, [~]abandonedbuilding, 
+			[~]hike_short, [~]hike_med, [~]hike_long, [~]fuel, 
+			[~]food, [~]wirelessbeacon, [~]partnership, 
+			[~]field_puzzle, [~]hiking, [~]seasonal, 
+			[~]touristok, [~]treeclimbing, [~]frontyard, 
+			[~]teamwork, [~]geotour, 
+
+			~keyword means NOT keyword.
+
+        -c              Remove cookie file when done
+        -u username     Username for http://www.geocaching.com
+        -p password     Password for http://www.geocaching.com
+        -U              Retrieve latest version of this script
+        -D lvl          Debug level [$DEBUG]
+
+			0: Create and run query, then delete it
+			1: Create query but do not run or delete it
+			2: More verbose version of -D1
+			3: Just show what curl command would be executed
+
+    Instant Data Options:
+	-o format	Output format, -o? for possibilities [$OUTFMT]
+			plus "gpsdrive.sql" for direct insertion into MySQL DB
+			plus "map[,geo-map-opts]" to display a geo-map.
+	-O filename	Output file, if not stdout
+	-H htmldir	Also fetch the printable HTML pages (slowly)
+	-L logdir	Also fetch the plain text log entries (slowly)
+	-f              Do not report any found or unavailable caches
+	-F		Report caches found by the login 'username' as unfound
+
+    Defaults can also be set with variables in file \$HOME/.georc:
+
+        PASSWORD=password;  USERNAME=username;
+        LAT=latitude;       LON=logitude;
+
+EXAMPLES
+	Nearest $NUM caches to my home location:
+
+	    geo-demand
+
+	Nearest $NUM caches to a lat/lon:
+
+	    geo-demand 44.53 -93.56
+	    geo-demand 44.25.234 -93.51.543
+
+	Nearest $NUM caches to a zip code:
+
+	    geo-demand 55344
+
+	$NUM caches in a state:
+
+	    geo-demand mn
+
+	$NUM caches in a state using lat/lon:
+
+	    geo-demand mn n43.6 w92
+
+	$NUM caches in a country:
+
+	    geo-demand iraq
+
+	$NUM caches in a country by code:
+
+	    geo-demand c12
+
+	$NUM caches in a foreign state:
+
+	    geo-demand berlin
+
+	Caches I have not found, and wait until query is deleted
+	before exiting (useful in batch scripts):
+
+	    geo-demand -q notfound -w
+
+	Generate a query, but do not execute it.  Check the gc.com website
+	to see what query would have been run...
+
+	    geo-demand -D1
+
+	    Check website: https://www.geocaching.com/pocket/
+
+	Append to the ignore list any caches that were ever SOCs:
+
+	    ignore=\$HOME/.geo-ignore
+	    geo-demand -o gpsdrive -qsoc mn |
+		awk '{print \$1}' >> \$ignore
+		sort -u -o \$ignore \$ignore
+
+	Delete patterns which match "mn-":
+
+	    geo_demand -k mn-
+
+SEE ALSO
+	geo-countries-states
+	geo-newest, geo-found, geo-placed, geo-nearest,
+	$WEBHOME
+EOF
+
+	exit 1
+}
+
+##############################################################################
+# begin #include "geo-common"
+##############################################################################
+
+# I doubt this stuff will work in other than english
+LANG=en_US
+
+#
+#	Common global constants
+#
+UA="Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; .NET CLR 1.1.4322)"
+WEBHOME="http://geo.rkkda.com/"
+
+#
+#	Common global variables
+#
+DEBUG=0
+CRUFT=
+CURL_OPTS=
+
+#
+#       Report an error and exit
+#
+error() {
+	echo "`basename $PROGNAME`: $1" >&2
+	exit 1
+}
+
+debug() {
+        if [ $DEBUG -ge $1 ]; then
+            echo "`basename $PROGNAME`: $2" >&2
+        fi
+}
+
+verbose() {
+        if [ $VERBOSE -ge $1 ]; then
+            echo "$2" >&2
+        fi
+}
+
+dbgcmd() {
+	if [ $DEBUG -ge $DBGCMD_LVL ]; then
+	    echo "$@" >&2
+	fi
+	"$@"
+}
+DBGCMD_LVL=2
+
+#
+#	procedure to remove cruft files
+#
+remove_cruft() {
+	if [ $DEBUG = 0 -a "$CRUFT" != "" ]; then
+	    for i in $CRUFT
+	    do
+		if [ -f $i ]; then
+		    rm -f $i
+		elif [ -d $i ]; then
+		    rm -rf $i
+		fi
+	    done
+	fi
+}
+
+trap remove_cruft EXIT
+
+#
+# Convert DegDec, MinDec, or DMS lat/lon to DegDec
+#
+latlon() {
+    # Handle NSEW prefixes
+    arg1=`echo "$1" | sed -e 's/^[nNeE]//' -e 's/^[wW]/-/' -e 's/^[sS]/-/'`
+    # If negative, print the sign then take the absolute value
+    case "$arg1" in
+    -*)	printf "-"; arg1=`echo "$arg1" | sed 's/^-//'`;;
+    esac
+    # Now handle the 3 different formats
+    case $# in
+    1)	
+	case "$arg1" in
+	*.*.*)	echo "$arg1" \
+		| sed -e 's/,//' -e 's#\([^.]*\)\.#\1 #' -e 's#$# 6k 60/+p#' \
+		| dc
+		;;
+	lat=*)
+		echo "$arg1" | sed 's/^lat=//'
+		;;
+	lon=*)
+		echo "$arg1" | sed 's/^lon=//'
+		;;
+	*)	echo "$arg1"
+		;;
+	esac
+	;;
+    2)	echo "6k $arg1 $2 60/+p" | dc;;
+    3)	echo "6k $arg1 $2 60/ $3 3600/++p" | dc;;
+    esac
+}
+
+#
+#	Convert DegDec to MinDec with optional NS/EW
+#
+degdec2mindec() {
+    awk -v v=$1 -v sym=$2 \
+    '
+    function abs(x)     { return (x>=0) ? x : -x }
+    BEGIN{
+	i=int(v)
+	if (sym == "")
+	    printf "%d.%06.3f\n", i, abs(v-i) * 60
+	else
+	    printf "%s%02d.%06.3f\n", \
+		(v >= 0.0) ? substr(sym, 1, 1) : substr(sym, 2, 1), \
+		abs(i), abs(v-i) * 60
+    }'
+}
+
+#
+#	Read RC file, if there is one
+#
+read_rc_file() {
+    if [ -f $HOME/.georc ]; then
+	. $HOME/.georc
+	# Allow LAT/LON in rc file to be in any of the formats that we grok
+	if [ "" != "$LAT" ]; then
+	    if ! is_latlon $LAT 0; then
+		error "Latitude '$LAT' is not parsed in .georc!"
+	    fi
+	    LAT=`latlon $LAT`
+	fi
+	if [ "" != "$LON" ]; then
+	    if ! is_latlon 0 $LON; then
+		error "Longitude '$LON' is not parsed in .georc!"
+	    fi
+	    LON=`latlon $LON`
+	fi
+    else
+	cat <<-EOF > $HOME/.georc
+		#
+		# These are the default values for the geo-* series of programs
+		# Please edit this file as needed.  Setting values for
+		# USERNAME, PASSWORD, LAT/LON, and STATE are required.
+		#
+
+		#################################
+		# Login and paid membership status for www.geocaching.com...
+		#USERNAME=name
+		#PASSWORD=pasword
+		# Premium Member (Subscriber) Only Caches set this to a "1"...
+		#SOC=0
+
+		#################################
+		# Your HOME lat/lon and state...
+		#LAT=N44.55.666
+		#LON=W93.11.222
+		#STATE=MN
+
+		#################################
+		# Default map scale, font, and source...
+		#MAPSCALE=10K
+		#MAPFONT=helvetica
+		#MAPSRC=2
+		#Google Maps API Key, otherwise you will get:
+		#	"For development purposes only" on all maps!
+		#GMAP_KEY=AAaaAaA0A00AAaAA0AA0aaAAAAAAaaAAAAaa00A
+
+		#################################
+		# Login for terraserver.com...
+		#TSCOM_EMAIL=xxx@yyy.com
+		#TSCOM_PW=password
+
+		#################################
+		# Miscellaneous...
+		#OUTFMT=gpsdrive
+		#GPSDRIVE_VER=2.09
+		#Basic members: Cache the GCxxxxx listing for this many days:
+		#CACHE_CACHE_MAX_AGE="1 day"
+		#GEOMYSTERY=$HOME/.geo-mystery
+		#OCMYSTERY=$HOME/.oc-mystery
+		#DATEFMT=0
+		#CURL_OPTS="-4"
+		#CURL_OPTS="--sslv3"
+
+		#################################
+		# Login, Email, and password for opencaching.*
+		#OK_USERNAME=name
+		#OK_EMAIL=name@yyy.com
+		#OK_PASSWORD=password
+	EOF
+	error "First time user: please review and edit $HOME/.georc"
+    fi
+}
+
+if [ `uname` = 'Darwin' ]; then
+    sed=gsed
+    date=gdate
+    touch=gtouch
+    awk=gawk
+    PATH=$PATH:/usr/local/bin:/opt/local/bin
+    export PATH
+elif [ `uname` = 'FreeBSD' ]; then
+    sed=gsed
+    date=gdate
+    touch=gtouch
+    awk=gawk
+else
+    sed=sed
+    date=date
+    touch=touch
+    awk=awk
+fi
+
+#
+#	Get the value from a name= value= pair in a file
+#
+get_value() {
+    # <input type="hidden" name="__EVENTTARGET" value=""
+    what=$1
+    where=$2
+    eval $what=`$sed -n "s/^.*\"$what\" *value=\"\([^\"]*\)\".*/\1/p" < $where`
+}
+#
+#	Get the hidden value from a name= value= pair in a file
+#
+#	NOTE: sometimes they are two, thus the "tail -1"
+#
+get_hidden_value() {
+    # <input type="hidden" name="__EVENTTARGET" value=""
+    what=$1
+    where=$2
+    eval $what=`$sed -n "s/^.*\"$what\" *type=\"hidden\" *value=\"\([^\"]*\)\".*/\1/p" < $where | tail -1`
+}
+
+#
+#	urlencode
+#
+#	incomplete, just does what we need it to do
+#
+urlencode() {
+    echo "$1" | sed -e 's/\+/%2B/g' -e 's/\&/%26/g' #-e 's/\//%2F/'
+}
+
+#
+#	urlencode2
+#
+urlencode2() {
+    echo "$1" |
+    awk '
+	BEGIN {
+	    split("1 2 3 4 5 6 7 8 9 A B C D E F", hextab, " ")
+	    hextab[0] = 0
+	    for (i = 1; i <= 255; ++i) ord[ sprintf ("%c", i) "" ] = i + 0
+	}
+	{
+	    encoded = ""
+	    for (i = 1; i <= length($0); ++i ) {
+		c = substr ($0, i, 1)
+		val = ord[c]
+		if (val >= 97 && val <= 122)		#0x61-0x7A
+		    encoded = encoded c
+		else if (val >= 65 && val <= 90)	#0x41-0x5A
+		    encoded = encoded c
+		else if (val >= 48 && val <= 57)	#0x30-0x39
+		    encoded = encoded c
+		else if (val >= 45 && val <= 46)	#0x2D-0x2E
+		    encoded = encoded c
+		else if (c == " ")
+		    encoded = encoded "+"
+		else if (val < 128) {
+		    lo = val % 16
+		    hi = int(val / 16);
+		    encoded = encoded "%" hextab[hi] hextab[lo]
+		}
+		else {
+		    byte = 192 + val/64
+		    lo = byte % 16
+		    hi = int(byte / 16);
+		    encoded = encoded "%" hextab[hi] hextab[lo]
+		    byte = 128 + val%64
+		    lo = byte % 16
+		    hi = int(byte / 16);
+		    encoded = encoded "%" hextab[hi] hextab[lo]
+		}
+	    }
+	    print encoded
+	}
+    '
+}
+
+#
+#	return true if current arguments appear to be a lat/lon
+#
+is_latlon() {
+    if [ "$#" -lt 2 ]; then
+	return 1
+    fi
+    case "$1" in
+    lat=*)		;;		# cut/paste from GPX file
+    [NSns])		return 0;;	# cut/paste from gc.com
+    [NSns][0-9]*)	;;
+    [-][0-9]*)		;;
+    [0-9]*)		;;
+    *)			return 1;;
+    esac
+    case "$2" in
+    lon=*)		return 0;;
+    [EWew][0-9]*)	return 0;;
+    [-][0-9]*)		return 0;;
+    [0-9]*)		return 0;;
+    *)			return 1;;
+    esac
+}
+
+#
+#	split lines between two strings
+#
+#	$1 - string 1
+#	$2 - string 2
+#	$3 - null or 'g'
+#
+split_lines_between() {
+    sed "s@$1$2@$1\\
+$2@$3"
+}
+
+#
+#	process lat/lon calling a function with a shift count
+#
+#	e.g.	process_latlon encode 0 $@
+#
+process_latlon() {
+    prog=$1
+    shiftnum=$2
+    shift 2
+    shifttot=`expr 2 + $shiftnum`
+    case "$shiftnum" in
+    [0-9])	;;
+    *)		error "shift number is not 0-9!";;
+    esac
+
+    while [ $# -ge $shifttot ]; do
+	case "$1" in
+        N|S)
+            if [ $# -ge 6 ]; then
+                # Allow cut and paste from geocaching.com cache page
+                # N 44Â° 58.630 W 093Â° 09.310
+                lat=`echo "$1$2.$3" | tr -d '\260\302' `
+                lat=`latlon $lat`
+                lon=`echo "$4$5.$6" | tr -d '\260\302' `
+                lon=`latlon $lon`
+                shift 6
+            else
+                error "Illegal lat/lon: $*"
+            fi
+            ;;
+        *)
+            lat=`latlon $1`
+            lon=`latlon $2`
+            shift 2
+            ;;
+        esac
+
+	$prog $lat $lon $@
+
+	shift $shiftnum
+    done
+    
+}
+
+##############################################################################
+# end #include "geo-common"
+##############################################################################
+##############################################################################
+# begin #include "geo-common-gc"
+# 
+# $Id: geo-common-gc,v 1.367 2019/05/12 00:07:16 rick Exp $
+##############################################################################
+
+#
+#	Common global constants
+#
+UA="Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; .NET CLR 1.1.4322)"
+UA="Mozilla/5.0 (Macintosh; U; PPC Mac OS X; en) AppleWebKit/XX (KHTML, like Gecko) Version/ZZ Safari/YY"
+GEO="http://www.geocaching.com"
+GEOS="https://www.geocaching.com"
+
+#
+#	Global variables that can be overridden on command line or rc file
+#
+PASSWORD=dummy
+USERNAME=dummy
+LAT=44.9472
+LON=-93.4914
+SOC=${SOC:0}
+GEOMYSTERY=/dev/null
+GEODIR=$HOME/.geo
+case `uname` in
+CYGWIN*)	CURL_OPTS=-k;;
+*)		CURL_OPTS=
+esac
+
+#
+#	Global variables
+#
+COOKIE_FILE=$HOME/.geocookies
+NOCOOKIES=0
+FOUND=1
+USERFOUND=1
+BABELFLAGS=
+RADIUS=
+RADIUS_NUM=
+RADIUS_MILES=
+OUTFILE=
+OUTFMT=gpsdrive
+CACHE_CACHE_MAX_AGE="1 day"
+NUM=20
+INCLUDE=*
+EXCLUDE='-unavail'
+VARTIME=found
+GEOSLEEP=${GEOSLEEP:-8}
+
+#
+#	Common options handling
+#
+gc_usage() {
+	cat <<EOF
+OPTIONS
+	-b bookmark	Use list "bookmark" [none]
+	-q query	geo-nearest: Use PQ list "query" [none]
+	-q search	geo-newest: Use search "search" [none]
+	-c		Remove cookie file when done
+	-f              Do not report any found or unavailable caches
+	-m              Do not report any members-only caches
+	-F		Report caches found by the login 'username' as unfound
+	-n num		Return "num" caches [$NUM]
+	-s		Output short names for the caches (gpsbabel option)
+	-I term		Include only caches with 'term' [$INCLUDE]
+	-X term		Exclude caches with 'term' [$EXCLUDE]
+			terms: ~ (exclude none), unfound, ifound, soc, unavail,
+			regular, multi, virtual, webcam, event, hybrid, cito
+	-r radius	Display only caches with radius in miles (e.g. -r 25)
+			Suffix the value with "km" for kilometers.
+	-M mystery	Use file 'mystery' for unknown/mystery/puzzle
+			caches [$GEOMYSTERY]. Awk Format:
+
+			gcid lat lon comment
+
+	                i.e.: GC2CBVB n44.45.123 w93.00.321       Final
+
+	-u username	Username for http://www.geocaching.com
+	-p password	Password for http://www.geocaching.com
+	-o format	Output format, -o? for possibilities [$OUTFMT]
+			plus "gpsdrive.sql" for direct insertion into MySQL DB
+			plus "map[,geo-map-opts]" to display a geo-map.
+	-O filename	Output file, if not stdout
+	-S              Alias for -o gpsdrive.sql
+        -d              For -S, just delete selected records
+        -P              For -S, purge all records of type -t $SQLTAG*
+	-t type		For -ogpsdrive.sql, the waypoint type [$SQLTAG]
+	-H htmldir	Also fetch the printable HTML pages (slowly)
+	-L logdir	Also fetch the plain text log entries (slowly)
+			For -H or -L, the limit is 1500 updated caches/day.
+	-! "lpr -Plp"	Print HTML pages
+	-E var=val	Set environment "var" to "val"
+			i.e. DATEFMT=0|1
+	-D lvl		Debug level [$DEBUG]
+	-U		Retrieve latest version of this script
+
+DEFAULTS
+	Defaults can also be set with variables in file \$HOME/.georc:
+
+	    PASSWORD=password;  USERNAME=username;   SOC=0|1;
+	    LAT=latitude;       LON=logitude;        GEOMYSTERY=/dev/null;
+	    NUM=num;            OUTFMT=format;       BABELFLAGS=-s;
+	    SQLUSER=gast;       SQLPASS=gast;        SQLDB=geoinfo;
+	    DATEFMT=[0|1];      CACHE_CACHE_MAX_AGE="1 day";
+
+DATE FORMATS
+	Geocaching.com date formats that are compatible:
+
+	    GC Format   Example	    Compatible
+	    YYYY-MM-DD	2011-07-13  yes
+	    YYYY/MM/DD	2011/07/13  yes
+	    MM/DD/YYYY	07/13/2011  yes
+	    DD/MM/YYYY	13/07/2011  yes if DATEFMT=1 in \$HOME/.georc
+	    DD.MM.YYYY	13.07.2011  yes if DATEFMT=1 in \$HOME/.georc
+	    DD/Mmm/YYYY	13/Jul/2001 no
+	    DD.Mmm.YYYY	13.Jul.2001 no
+	    Mmm/DD/YYYY	Jul/13/2011 no
+	    DD Mmm YY   13 Jul 11   yes	(english only)
+
+	Change them here:
+
+	    http://www.geocaching.com/account/ManagePreferences.aspx
+EOF
+}
+
+gc_getopts() {
+    #
+    # Defaults for options that cannot be overriden in the RC file
+    #
+    PURGE=0
+    DELETE=0
+    SQL=0
+    MAP=0
+    HTMLDIR=
+    LOGDIR=
+    CMDPIPE=
+    BOOKMARK=
+    POCKETQUERY=
+
+    while getopts "!:E:H:L:I:X:b:q:cdfFmM:n:o:O:p:Pr:sSt:u:D:Uh?-" opt
+    do
+	case $opt in
+	"!")	CMDPIPE="$OPTARG";;
+	b)	BOOKMARK="$OPTARG";;
+	q)	POCKETQUERY="$OPTARG";;
+	c)	NOCOOKIES=1;;
+	d)	DELETE=1;;
+	E)	eval "$OPTARG";;
+	f)	FOUND=0; EXCLUDE="$EXCLUDE|-ifound";;
+	m)	SOC=0;;
+	M)	GEOMYSTERY="$OPTARG";;
+	I)
+		if [ "$INCLUDE" = "*" ]; then
+		    INCLUDE=
+		else
+		    INCLUDE="$INCLUDE|"
+		fi
+		INCLUDE="$INCLUDE-$OPTARG"
+		;;
+	X)
+		if [ "" = "$OPTARG" -o "~"  = "$OPTARG" ]; then
+		    EXCLUDE=-ExClUdEnOtHiNg
+		else
+		    EXCLUDE="$EXCLUDE|-$OPTARG"
+		fi
+		;;
+	F)	USERFOUND=0;;
+	P)	PURGE=1;;
+	n)	NUM="$OPTARG"
+		case "$NUM" in
+		[0-9]*)	;;
+		*)	error "Not a number: '$NUM'";;
+		esac
+		if [ "$NUM" -lt 1 -o "$NUM" -gt 999999 ]; then
+		    error "NUM is not between 1 and 999999 ($NUM)"
+		fi
+		;;
+	r)	RADIUS="$OPTARG"
+		RADIUS_NUM=`awk -v "N=$RADIUS" 'BEGIN{printf "%d\n", N}'`
+		case "$RADIUS" in
+		*km*|*KM*)
+		    RADIUS_UNITS=km
+		    RADIUS_MILES=`dc -e "6k $RADIUS_NUM 1.609344/p" `
+		    ;;
+		*)
+		    RADIUS_MILES=$RADIUS_NUM
+		    RADIUS_UNITS=mi
+		    ;;
+		esac
+		;;
+	s)	BABELFLAGS="$BABELFLAGS -s"; GEONUKE=",nuke_placer";;
+	S)      OUTFMT="gpsdrive.sql";;
+	t)	SQLTAG="$OPTARG";;
+	u)	USERNAME="$OPTARG";;
+	p)	PASSWORD="$OPTARG";;
+	o)	OUTFMT="$OPTARG";;
+	O)	OUTFILE="$OPTARG";;
+	H)	HTMLDIR="$OPTARG";;
+	L)	LOGDIR="$OPTARG";;
+	D)	DEBUG="$OPTARG";;
+	U)	echo "Getting latest version of this script..."
+		curl $CURL_OPTS -o$UPDATE_FILE "$UPDATE_URL"
+		chmod +x "$UPDATE_FILE"
+		echo "Latest version is in $UPDATE_FILE"
+		exit
+		;;
+	h|\?|-)	usage;;
+	esac
+    done
+    
+    shiftamt=`expr $OPTIND - 1`
+    shift $shiftamt
+
+    case "$SOC" in
+    0)	EXCLUDE="$EXCLUDE|-soc";;
+    esac
+
+    case "$OUTFMT" in
+    map)
+	OUTFMT=tiger,newmarker=grnpin,iconismarker
+	MAP=1
+	;;
+    map,*)
+	MAPOPTS=`echo "$OUTFMT" | $sed -n 's/map,\(.*\)$/\1/p'`
+	OUTFMT=tiger,newmarker=grnpin,iconismarker
+	MAP=1
+	;;
+
+    gpsdrive.sql)
+	OUTFMT=gpsdrive
+	SQL=1
+	# DEBUG=1
+	;;
+    \?)
+	gpsbabel_formats
+	exit
+	;;
+    esac
+
+    LOGUSERNAME="$USERNAME"
+    return $shiftamt
+}
+
+#
+#	Get viewstate
+#
+gc_getviewstate() {
+    debug 2 "gc_getviewstate:"
+    file=$1
+    get_value __EVENTTARGET $file
+    get_value __EVENTARGUMENT $file
+    get_value __VIEWSTATEFIELDCOUNT $file
+    get_value __VIEWSTATE $file; __VIEWSTATE=`urlencode "$__VIEWSTATE"`
+    get_value __EVENTVALIDATION $file;
+	__EVENTVALIDATION=`urlencode "$__EVENTVALIDATION"`
+    get_value __VIEWSTATEGENERATOR $file
+    viewstate=
+    viewstate="$viewstate -d __VIEWSTATE=$__VIEWSTATE"
+    if [ "$__VIEWSTATEFIELDCOUNT" != "" ]; then
+	fc=1
+	while test $fc -lt $__VIEWSTATEFIELDCOUNT; do
+	    get_value __VIEWSTATE$fc $file
+	    eval xxx=\${__VIEWSTATE$fc}
+	    eval __VIEWSTATE$fc=`urlencode "$xxx"`
+	    eval xxx=\${__VIEWSTATE$fc}
+	    viewstate="$viewstate -d __VIEWSTATE$fc=$xxx"
+	    fc=`expr $fc + 1`
+	done
+	viewstate="$viewstate -d __VIEWSTATEFIELDCOUNT=$__VIEWSTATEFIELDCOUNT"
+    fi
+    if [ "$__VIEWSTATEGENERATOR" != "" ]; then
+	viewstate="$viewstate -d __VIEWSTATEGENERATOR=$__VIEWSTATEGENERATOR"
+    fi
+}
+
+#
+#	login to geocaching.com
+#
+#	Outputs: $__VIEWSTATE
+#
+gc_login() {
+    _username=`urlencode "$1"`
+    _password=`urlencode "$2"`
+
+    [ "$_username" != dummy ] || error "You need a www.geocaching.com username"
+    [ "$_password" != dummy ] || error "You need a www.geocaching.com password"
+
+    #
+    #	Get the login page so we can get a valid viewstate
+    #
+    LOGINPAGE=${TMP}-login.html
+    CRUFT="$CRUFT $LOGINPAGE"
+
+    URL="$GEOS/login/default.aspx"
+    URL="$GEOS/account/login"
+    URL="$GEOS/account/signin"
+    debug 1 "curl $CURL_OPTS $URL"
+    curl $CURL_OPTS -s -A "$UA" -c$COOKIE_FILE \
+	-e "$URL" \
+	-o $LOGINPAGE "$URL"
+    [ -s $LOGINPAGE ] \
+	|| error "Unable to connect to gc.com; Try: CURL_OPTS=\"--sslv3\" in ~/.georc"
+    #get_value __VIEWSTATE $LOGINPAGE
+    #__VIEWSTATE=`urlencode "$__VIEWSTATE"`
+    #get_value __EVENTVALIDATION $LOGINPAGE
+    #__EVENTVALIDATION=`urlencode "$__EVENTVALIDATION"`
+    get_hidden_value __RequestVerificationToken $LOGINPAGE
+    __RequestVerificationToken=`urlencode "$__RequestVerificationToken"`
+
+    sleep 2
+
+    #
+    #	Now post the login
+    #
+    URL="$GEOS/login/default.aspx"
+    URL="$GEOS/account/login"
+    URL="$GEOS/account/signin"
+    #
+    # RER 05/05/12: bug in recent curl/openssl use "--sslv3" for a workaround
+    debug 1 "curl $URL"
+    dbgcmd curl $CURL_OPTS -s -A "$UA" -b$COOKIE_FILE -c$COOKIE_FILE \
+	-e "$URL" \
+	-d__RequestVerificationToken="$__RequestVerificationToken" \
+	-dUsernameOrEmail="$_username" \
+	-dPassword="$_password" \
+	-L "$URL" > $LOGINPAGE
+    if [ ! -s $LOGINPAGE ]; then
+	error "curl: returned /dev/null for '$LOGINPAGE'"
+    fi
+    if grep -q "validation-summary-errors" $LOGINPAGE; then
+	msg=`grep validation-summary-errors $LOGINPAGE |
+	    sed -e 's/.*validation-summary-errors.><ul><li>//' -e 's/<.*//'`
+	error "$msg"
+    fi 
+    if grep -q "If you are human" $LOGINPAGE; then
+	error "Have to login this time with a web browser because of Recaptcha"
+    fi 
+    if grep -q "doing a bit of scheduled maintenance right now" $LOGINPAGE; then
+	error "Geocaching.com is temporarily down for maintenance."
+    fi 
+    return
+    # Make case insignificant
+    if ! grep -y -q "ctl00_ContentBody_LoggedInPanel" $LOGINPAGE; then
+	error "BUG: gc.com changed the login page."
+    fi 
+}
+
+#
+#	procedure to nag about agreeing to EasyGps download license
+#
+easy_warning() {
+	cat <<-EOF
+	You have not agreed to the waypoint download license at $GEO
+
+	Click one of the waypoint license agreement links at $GEO,
+	read and agree to the license terms, then try this program again.
+	EOF
+}
+
+#
+#	getcids infile cidfile xtrafile archfile number
+#
+#	Wade thru the HTML and produce lists of found, notfound and new CIDs
+#
+getcids() {
+    awk \
+	-v "CIDFILE=$2" \
+	-v "XTRAFILE=$3" \
+	-v "ARCHFILE=$4" \
+	-v "NUM=$5" \
+	-v "USERFOUND=$USERFOUND" \
+	-v "VARTIME=$VARTIME" \
+	-v "SOC=$SOC" \
+	-v "DATE=$date" \
+	-v "DATEFMT=$DATEFMT" \
+	-v "DEBUG=$DEBUG" \
+	< $1 \
+    '
+    function debug(lvl, text) {
+	if (lvl <= DEBUG)
+	    print text > "/dev/stderr"
+    }
+    function hex2dec(x,   val) {
+	for (val = 0; length(x); x = substr(x, 2))
+	    val = 16*val + index("0123456789ABCDEF", substr(x, 1, 1)) - 1
+	return val
+    }
+    # Convert GC0000 to 58913
+    function wp2id(wp,    val) {
+	sub("^GC", "", wp)
+	if (DEBUG > 5)
+	    print "wp2id: " wp " ..." > "/dev/stderr"
+	if (length(wp) <= 4 && wp < "G000")
+	{
+	    val = hex2dec(wp)
+	    if (DEBUG > 5)
+		print "wp2id hex: " val " ..." > "/dev/stderr"
+	    return val
+	}
+	set = "0123456789ABCDEFGHJKMNPQRTVWXYZ"
+	val = 0
+	for (pos = 1; pos <= length(wp); ++pos)
+	{
+	    val *= 31;
+	    val += index(set, substr(wp, pos, 1)) - 1;
+	}
+	val = val - 411120
+	if (DEBUG > 5)
+	    print "wp2id id: " val " ..." > "/dev/stderr"
+	return val
+    }
+    function id2wp(id,    val) {
+	gid = "";
+	if (id < 0)
+	    ;
+	else if (id < 65536)
+	    gid = sprintf("GC%X", id)	# Was %04X
+	else
+	{
+	    GcOffset = 16 * 31 * 31 * 31 - 65536
+	    GcSet = "0123456789ABCDEFGHJKMNPQRTVWXYZ"
+	    id += GcOffset;
+	    for (i = 1; i <= 4; ++i)
+	    {
+		gid = substr(GcSet, id%31 + 1, 1) gid
+		id = int(id / 31)
+	    }
+	    tmp = substr(GcSet, id%31 + 1, 1)
+	    if (tmp != 0)
+	    {
+	        gid = tmp gid
+		id = int(id / 31)
+	    }
+	    if (id)
+		gid = ""
+	    else
+		gid = "GC" gid
+	}
+	if (DEBUG >= 5)
+	    print "id = ", id, "wp = ", gid > "/dev/stderr"
+	return gid
+    }
+
+    function hash2sdt(text,
+	    day, cmd, i, value, mod, s0, t0, d0) {
+	if (thiscode == "")
+	{
+	code[1] = "PDMTRXBJjZNH9fKW8vetlCgbos24mydknahrcOxYqLwGSE370z65ApVFQ"
+	code[2] = "6JKt4b70rHoeTLqQB2jANwcYSMW9xPk3aplE5hGvyfsZDgFmndOVRC8zX"
+	code[3] = "Rl2QaDdTsnK7rOZoywzx0H58NLCAGqgtp43mvYJVkFEejMWB69cXhfSbP"
+	code[4] = "jShz6gF3OvonKEWkJCbZf4GeDX25VcyPsqwRYpLM8BtATm0x7l9aHQdNr"
+	code[5] = "aJs2OWpoYfN9zvDHCwZrm83b4SKkFhXcAL0QPgBy7tMdRGlqxjEVn65Te"
+	code[6] = "g6aXp7rqvkEl5JLnRDhfWGHTeA9OMQYdwS2BcbK0jCyFx4sPo83tmzZVN"
+	code[7] = "MlocEO5eAgTFfLXzyPDk2qJhjBn98QSdNHR47mGWtY3ZvVxCpr0Ks6abw"
+	code[8] = "p7SPbvzM4VkQ8f25cJL0gBlWjYmFoKhArXRHZntTGe6CNsyE3a9qOdwDx"
+	code[9] = "znlBb8GHNdhCKyOpo53ePX9xfkvjD0aTEAVZ72qSQwrmMYct6JgRFWLs4"
+	code[10] = "KXztRHdrkBwSWEn3AN2Fh8vOL5QMjx6oTgyCD7JYpaGmVcf9Pelb4q0Zs"
+	code[11] = "M3odkDCgQa7GWK9pYh8tLAl6xFecRwPZNbTz0s42rqfOnSmvEjVyB5JXH"
+	code[12] = "gweGxNAYCKfLdrb68X93ahjHMDtTWRFJVZvl0po5ySmOQnscPz4Ekq2B7"
+	code[13] = "p2zelnEox9HqkGF4V5AZ6LbMBsy0dQc8J3fDXvON7jWgrKYCSTaPtRhmw"
+	code[14] = "cy2gjCAJt3KmMxbr5OzQeYsvHpLF8fRVaoNXdGBW0l7ESZDP9qkw4Th6n"
+	code[15] = "9KQZlwfBsCqN6oWkYhrSpDAEP48c5m3eJn2jVHLdybMx0gaOGRXzvFTt7"
+	code[16] = "7j6CJPfqbMygan42HwxFBcrK3RYLstmOXWGeSQZ9kzl0VE8oDTpAhd5Nv"
+	code[17] = "YScWw7gsx49ebLAqMGotHRX3fnCv6FBOkzVE5jdlmPTarDKQJyp8Z0hN2"
+	code[18] = "BgwR6oskAcVPqeYdLKr3ONvflXz2nDSbxMQJEhyZC0pWHm759GFa4tT8j"
+	code[19] = "9QyolrBq37he4nbCTcXEkmGHjYS02RDgMZLfOtavVzKNFxPs58p6JwWAd"
+	code[20] = "8OwsHykXLJ3tqWZmR2pbVagMcTdnSC9FveN5z0xYjGK6frh7Q4EPDBAlo"
+	code[21] = "RVBh8qEaN4Aw2Ob5egSytWjQD6oFmKvXfYnCzcx73kJsHrd9TLPZM0Glp"
+	code[22] = "7MqQGJkKzZvdgmRXBH8CYeAVf3cy29LOW4PNaD0rsnowEpTbF5Sxhtl6j"
+	code[23] = "8C26QBoWjEPcJ3Sf7TYtexXlMNyqArm0KD9HOLvZakGwnVbFsdp45Rzhg"
+	code[24] = "6e5fC2S4Bwcm9pVKyqdFE3WlRDroTLJgGtN8ZQsAabMzHYO0Xvj7Pnxhk"
+	code[25] = "JXHgMGcAVNpDEwWYvyBl025m89dOoTSKPxhstjq6e4QrCk3aZFbzfn7RL"
+	code[26] = "Yp3ARoesjKXB2cadmkHvFQM7SEJtqf0l9TwzbPLrZDxO8h5C6NnGWyVg4"
+	code[27] = "9kJaM4HonPWtcQvsYSEK3Vy5pjCRFqNO6lgr0x7mh2b8wdTGDzfLXeABZ"
+	code[28] = "4n2gSwqzGB7C0MpV3yDY9FTtol8XjkJNcEPr6LxhZQKdRvHOfsA5eWmab"
+	code[29] = "P6G8jsOxBCqf3k74DnXtAvl2ThabeEHJVgZp5wSzF9NWRcYMyL0dromKQ"
+	code[30] = "WVwgM93zjmNcLpHvoSK2Q5bCxaATGsryXn6Bhfd0Z8qtERk7PYOJD4Fle"
+	code[31] = "PZqTVol4HOXz0GWt38Qec59rKMyabfhE2DdsNxpF7RASkBjnYwvCgmJ6L"
+	    cmd = sprintf("%s -u +%%-d", DATE)
+	    cmd | getline day; close(cmd)
+	    thiscode = code[day]
+	}
+
+	value = 0
+	for (i = 1; i <= length(text); ++i) {
+	    value = 57 * value + index(thiscode, substr(text, i, 1)) - 1
+	}
+	#print value
+
+	mod = (value - 131586) % 16777216
+
+	s0 = int(mod / 131072);
+	t0 = int((mod % 131072) / 256)
+	d0 = int((mod % 131072) % 256)
+	#print s0, t0, d0
+
+	# cache size
+	if (s0 == 0) size = "not chosen"
+	else if (s0 == 1) size = "Micro"
+	else if (s0 == 2) size = "Regular"
+	else if (s0 == 3) size = "Large"
+	else if (s0 == 4) size = "Virtual"
+	else if (s0 == 5) size = "Unknown"
+	else if (s0 == 7) size = "Small"
+	else size = "BUG"
+
+	# terrain rating
+	if (t0 == 0) terrain = 1.0
+	else if (t0 == 1) terrain = 1.5
+	else if (t0 == 2) terrain = 2.0
+	else if (t0 == 3) terrain = 2.5
+	else if (t0 == 4) terrain = 3.0
+	else if (t0 == 5) terrain = 3.5
+	else if (t0 == 6) terrain = 4.0
+	else if (t0 == 7) terrain = 4.5
+	else terrain = 5.0
+
+	# difficulty rating
+	if (d0 == 0) difficulty = 1.0
+	else if (d0 == 1) difficulty = 1.5
+	else if (d0 == 2) difficulty = 2.0
+	else if (d0 == 3) difficulty = 2.5
+	else if (d0 == 4) difficulty = 3.0
+	else if (d0 == 5) difficulty = 3.5
+	else if (d0 == 6) difficulty = 4.0
+	else if (d0 == 7) difficulty = 4.5
+	else difficulty = 5.0
+    }
+
+    function begin_new_entry() {
+	# Beginning of a new entry, reset variables to defaults
+	inrecord = 1
+	avail = 1
+	archived = 0
+	bugs = 0
+	ifound = 0
+	iplaced = 0
+	soc = 0
+	unfound = 1
+	tdcnt = 0
+	gcid = "GC0000"
+	foundt = 0
+	ifoundrec = 0
+	ifoundt = 0
+	container = "unknown"
+	sendgps = 0	# Non-subscription members
+	placer = ""
+	# Bug Fix: FIXME
+	#gctype = "Traditional cache"
+	#type = "regular"
+	#difficulty = 0
+	#terrain = 0
+	# End Bug Fix: FIXME
+	if (DEBUG >= 5)
+	    print "Begin " NUM " ..." > "/dev/stderr"
+    }
+    function parse_dates(text,    cmd, val) {
+	sub("[*]$", "", text)
+	sub("^ *", "", text)	# remove leading blanks
+	debug(5, "parse_dates: text=" text)
+	if (text ~ /Today/)
+	{
+	    cmd = sprintf("%s -d \"%s\" +%%s", DATE, "12am today")
+	    cmd | getline val; close(cmd)
+	}
+	else if (text ~ /Yesterday/)
+	{
+	    cmd = sprintf("%s -d \"%s\" +%%s", DATE, "12am yesterday")
+	    cmd | getline val; close(cmd)
+	}
+	else if (text ~ /ago/)
+	{
+	    cmd = sprintf("%s -d \"12am %s\" +%%s", DATE, text)
+	    cmd | getline val; close(cmd)
+	}
+	else if (text ~ /[0-9][^<]*[0-9]/ )
+	{
+	    # GC Format   Example	    Compatible
+	    # YYYY-MM-DD	2011/07/13  yes
+	    # YYYY/MM/DD	2011/07/13  yes
+	    # MM/DD/YYYY	07/13/2011  yes
+	    # DD/MM/YYYY	13/07/2011  yes if DATEFMT = 1
+	    # DD.MM.YYYY	13.07.2011  yes if DATEFMT = 1
+	    # DD/Mmm/YYYY	13/Jul/2001 no
+	    # DD.Mmm.YYYY	13.Jul.2001 no
+	    # Mmm/DD/YYYY	Jul/13/2011 no
+	    # DD Mmm YY		13 Jul 11   yes (english only)
+	    nf = split(text, fld, "[/.]")
+	    if (nf == 3 && DATEFMT == 1)
+	    {
+		# DD before MM
+		debug(5, "parse_dates:  fld=" fld[1] "." fld[2] "." fld[3])
+		cmd = sprintf("%s -d \"12am %s\" +%%s", DATE,
+			fld[2] "/" fld[1] "/" fld[3])
+		cmd | getline val; close(cmd)
+	    }
+	    else
+	    {
+		# Regular way
+		cmd = sprintf("%s -d \"12am %s\" +%%s", DATE, text)
+		cmd | getline val; close(cmd)
+	    }
+	}
+	else
+	    val = 0
+	debug(5, "parse_dates: val=" val)
+	return val
+    }
+    BEGIN {
+	q = sprintf("%c", 39)
+	++NUM
+	gctype = "Traditional cache"
+	type = "regular"
+    }
+    # Test: geo-nearest -s (18)
+    # Test: geo-newest -s (20)
+    # Test: geo-nearest -b multi (8)
+    # 	
+    # For geo-nearest AND geo-nearest -b
+    /class=".* Data BorderTop"/ {
+	begin_new_entry()
+	debug(3, "Data BorderTop")
+	next
+    }
+    /<td/ {
+	++tdcnt;
+    }
+    inrecord && tdcnt >= 1 && tdcnt <= 10 {
+	if (DEBUG >= 5)
+	    print "tdcnt " tdcnt ", text: " $0 > "/dev/stderr"
+    }
+    # Old format... deprecated
+    /<a href="\/seek\/cache_details.aspx?[^>]*>/ {
+	name = $0
+
+	# remove strikeout class
+	sub("<span class[^>]*>", "", name)
+	sub("</span>", "", name)
+	sub(".*<span>", "", name)
+	sub("</span>.*", "", name)
+
+	sub(".*<a href=.../seek/cache_details.aspx?[^>]*>", "", name)
+	sub("</a>*.", "", name)
+	sub("</[^>]*>", "", name)
+	sub("</[^>]*>", "", name)
+	sub("<[^>]*>", "", name)
+	sub("<[^>]*>", "", name)
+	debug(5, "name: " name)
+    }
+    # New format with GC and title...
+    /<a href="https*:\/\/www.geocaching.com\/geocache\// {
+	name = $0
+	sub(".*<span>", "", name)
+	sub("</span>.*", "", name)
+	debug(5, "name: " name)
+    }
+    # bookmarks by guid=...
+    /<a href="https:..www.geocaching.com\/seek\/cache_details.aspx.guid=[^>]*>/ {
+	if ($0 ~ /img src/)
+	{
+	    name = $0
+	    sub(".*img src[^>]*>", "", name)
+	    sub("</span.*", "", name)
+	    sub(".*Strike.>", "", name)
+	    sub("</a.*", "", name)
+	    debug(5, "bid name: " name)
+
+	    gctype = $0
+	    sub(".* alt=.", "", gctype)
+	    sub(". />.*", "", gctype)
+	    debug(5, "gctype: " gctype)
+	}
+	else
+	{
+	    begin_new_entry()
+	    gcid = $0
+	    sub(".*<a href=.*/seek/cache_details.aspx?[^>]*>", "", gcid)
+	    sub("<.*", "", gcid)
+	    cid = wp2id(gcid)
+	    debug(5, "gcid: " gcid)
+	}
+    }
+    /"Found It!"/ {
+	if (USERFOUND)
+	    ifound = 1
+	next
+    }
+    /Premium Member Only Cache/ {
+	soc = 1
+    }
+    tdcnt == (9-0) && /[0-9][0-9]*.[0-9][0-9]*/ {
+	# RER: May 4, 2011
+	date = $0
+	sub(/^ */, "", date)
+	sub(/.*small.>/, "", date)
+	sub(/ *<.*/, "", date)
+	sub(/\015/, "", date)
+	debug(5, "placedt text: "date)
+	placedt = parse_dates(date)
+	debug(5, "placedt: " placedt)
+    }
+    # <td>
+    #	Yesterday<strong>*</strong><br />
+    #	<span class="Success">
+    #	    3 days ago*</span>
+    # </td>
+    #OR
+    # <td>
+    #	Yesterday<strong>*</strong><br />
+    #	<span class="Success">
+    #	</span>
+    # </td>
+    tdcnt == (10-0) && /[a-zA-Z0-9*>]<br .>/ {
+	# catch dates DD MMM YY, N days ago, Today, Yesterday
+	unfound = 0
+	date = $0
+	sub(".*<td>", "", date)
+	sub("<.*", "", date)
+	lastfoundt = parse_dates(date)
+	foundt = lastfoundt
+	debug(5, "lastfoundt: " lastfoundt)
+    }
+    tdcnt == (10-0) && /[a-zA-Z0-9*>]<.span>/ {
+	unfound = 0
+	date = $0
+	sub(".*Success.>", "", date)
+	sub("<.*", "", date)
+	ifoundt = parse_dates(date)
+	debug(5, "ifoundt: " ifoundt)
+    }
+    # code to recognize archived caches should be synchronized with gc_query below!
+    /<strike><font/ {
+	# i.e. <font color="red">
+	avail = 0; archived = 1
+    }
+    /<\/strike><\/font/ {
+	# i.e. <font color="red">
+	avail = 0; archived = 1
+    }
+    /<strike>[^<]/ {
+	avail = 0;
+    }
+    /class=".*Warning Strike.*">/ {
+	debug(5, "***archived***")
+	avail = 0; archived = 1
+    }
+    /class=".*Strike">/ {
+	avail = 0
+    }
+    tdcnt == 6 && /^ *by / {
+	placer = $0
+	sub("^ *by ", "", placer)
+	sub("\015", "", placer)
+	debug(5, "placer: <" placer ">")
+    }
+    tdcnt == 6 && /^ *GC/ {
+	gcid = $0
+	sub("^ *", "", gcid)
+	sub("\015", "", gcid)
+	debug(5, "GCID: <" gcid ">")
+        cid = wp2id(gcid)
+    }
+    # For archived caches ONLY:
+    #
+    #	<span class="small">2/2</span><br />
+    # 
+    # For unarchived caches: D/T comes from the $LOCFILE
+    #
+    tdcnt == 8 && /small.>/ {
+	difficulty = $0
+	sub(".*small.>", "", difficulty)
+	sub("<.*", "", difficulty)
+	terrain = difficulty
+	sub("/.*", "", difficulty)
+	sub(".*/", "", terrain)
+    }
+    /alt=.Your Geocache/ {
+	# altmy cache
+	# A mistake in the HTML! should be alt="my cache"
+	if (USERFOUND) {
+	    iplaced = 1
+	    ifound = 1
+	}
+    }
+    /alt="Earth[cC]ache"/ {
+	type = "earth"
+	gctype = "Earthcache"
+    }
+    /alt="Event Cache"/ {
+	type = "event"
+	gctype = "Event cache"
+    }
+    /alt="Groundspeak Block Party"/ {
+	type = "event"
+	gctype = "Groundspeak Block Party"
+    }
+    /alt="Groundspeak HQ"/ {
+	type = "event"
+	gctype = "Groundspeak HQ"
+    }
+    /alt="GPS Adventures Exhibit"/ {
+	type = "event"
+	gctype = "GPS Adventures Exhibit"
+	gctype = "Event cache"
+    }
+    /alt="Lost and Found Event Cache"/ {
+	type = "event"
+	gctype = "Lost and Found Event Cache"
+    }
+    /alt="Cache In Trash Out Event"/ {
+	type = "cito"
+	gctype = "Cache In Trash Out Event"
+    }
+    /alt="Traditional Cache"/ || /alt="Traditional Geocache"/ {
+	type = "regular"
+	gctype = "Traditional cache"
+    }
+    /alt="Letterbox Hybrid"/ {
+	type = "hybrid"
+	gctype = "Letterbox Hybrid"
+    }
+    /alt="Multi-cache"/ {
+	type = "multi"
+	gctype = "Multi-Cache"
+    }
+    /alt="Unknown Cache"/ || /alt="Mystery Cache"/ {
+	type = "unknown"
+	gctype = "Unknown Cache"
+    }
+    /alt="Virtual Cache"/ {
+	type = "virtual"
+	gctype = "Virtual cache"
+    }
+    /alt="Webcam Cache"/ {
+	type = "webcam"
+	gctype = "Webcam Cache"
+    }
+    /alt="Wherigo Cache"/ {
+	type = "wherigo"
+	gctype = "Wherigo Cache"
+    }
+    /alt="Mega-Event Cache"/ {
+	type = "mega"
+	gctype = "Mega-Event Cache"
+    }
+    /alt="Giga-Event Cache"/ {
+	type = "giga"
+	gctype = "Giga-Event Cache"
+    }
+    /name=.CID. / {
+	i = match($0, "value=.")
+	cid = substr($0, i+7, 99) + 0
+    }
+    /name=.BID. / {
+	i = match($0, "value=.")
+	bid = substr($0, i+7, 99) + 0
+    }
+    #/ImgGen.seek.CacheInfo.ashx?v=/ {
+    archived && /[?]v=/ {
+	text = $0
+	debug(5, "sdt text: " text)
+	sub(".*?v=", "", text)
+	sub(". .*", "", text)
+	debug(5, "sdt text: " text)
+	hash2sdt(text)
+	debug(5, "size: " size " difficulty: " difficulty " terrain: " terrain)
+	container = size
+    }
+    /Unapproved cache/ && inrecord {
+	avail = 0; archived = 1
+    }
+    /class=.Checkbox NoBolding./ {
+	sendgps = 1	# Subscription members
+    }
+    /<\/[tT][rR]>/ && inrecord {
+	# RER mod 11/22/10: if (0 && ..
+	if (0 && sendgps == 0)
+	    next
+	inrecord = 0
+	debug(5, "End")
+
+	strtype = "Geocache"
+
+	if (soc) strtype = strtype "-soc"
+	if (unfound) strtype = strtype "-unfound"
+	else if (ifound) strtype = strtype "-ifound"
+	if (!avail) strtype = strtype "-unavail"
+	if (archived) strtype = strtype "-archived"
+
+	strtype = strtype "-" type
+
+	# gpsbabel only allows one time in the DB, figure out what
+	# time to use for this, but always carry all three times
+	# in the .xtra file
+	if (iplaced) ifoundt = placedt
+	vartime=1234
+	if (VARTIME == "placed") vartime = placedt
+	else if (VARTIME == "ifound") vartime = ifoundt
+	#else if (foundt > 0) vartime = foundt
+	else vartime = placedt
+
+	# date -d 1970-01-01 1237093200 sec +%Y%m%d
+	# 20090315
+	cmd = sprintf("%s -d \"1970-01-01 %d sec\" +%%Y%%m%%d",
+	    DATE, lastfoundt)
+	cmd | getline lastfound; close(cmd)
+
+	# avail=1 is the choice right now (8/19/05)
+	# archived=0 is the choice right now (11/14/06)
+	# sendgps=1 Remove non-soc caches from basic member. (12/18/2012)
+	debug(5, gcid "\tsendgps: " sendgps " archived: " archived  \
+		    " SOC: " SOC " soc: " soc " bid: " bid)
+	if (!archived && (SOC || !soc) && (sendgps == 1 || bid) )
+	{
+	    if (bid != 0) {
+		printf("-dBID=%d\n", bid) > CIDFILE
+		gcid = id2wp(bid)
+		# sub("^GC0", "GC", gcid) # RER 02/27/15 GC04F9 == GC4F9
+	    } else if (cid != 0) {
+		printf("-dCID=%d\n", cid) > CIDFILE
+	    }
+	    # GCID type vartime ifound soc iplaced tPLACED tFOUND tIFOUND
+		#"%.1f\t%.1f\t%s\t"
+		#difficulty, terrain, container,
+	    printf "%s\t%s\t%d\t%s\t%s\t%s\t%d\t%d\t%d\t" \
+		    "%s\t%s\t%s\t%s\n",
+		    gcid, strtype, vartime,
+		    ifound, soc, iplaced, placedt, foundt, ifoundt,
+		    gctype, placer, "hint", lastfound >> XTRAFILE
+	    if (--NUM == 0)
+		exit
+	}
+	else if (archived)
+	{
+	    if (DEBUG > 5)
+		print "Archived ", gcid, " " name > "/dev/stderr"
+	    if (name == "")
+		name = "error-no-name!"
+	    if (placer == "")
+		placer = "unknown-placer"
+	    # Use "merge" file output, NOT XTRAFILE!
+	    printf "%s\t%s\t0.0\t0.0\t%s%s%s\t" \
+		"%.1f\t%.1f\t%s\t" \
+		"%s\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\n",
+		gcid, name " by " placer,
+		"https://www.geocaching.com/seek/cache_details.aspx",
+		"?log=y&wp=", gcid,
+		difficulty, terrain, container,
+		strtype, vartime,
+		ifound, soc, iplaced, placedt, foundt, ifoundt,
+		gctype, placer, "hint", lastfound >> ARCHFILE
+	    if (--NUM == 0)
+		exit
+	}
+    }
+    '
+}
+
+#
+#	A temporary style we can use for merging the loc data with
+#	the scraped html data.  This is a dual purpose hack.  We
+#	use it as an output format to convert the .loc data to a
+#	record-per-line	format.  We use it as an input format to
+#	read up the merged data.
+#
+make_scrape_style() {
+    cat <<-EOF
+	ENCODING		UTF-8
+	FIELD_DELIMITER		TAB
+	RECORD_DELIMITER        NEWLINE
+	BADCHARS                TAB
+	IFIELD	SHORTNAME,	"",	"%s"
+	IFIELD	DESCRIPTION,	"",	"%s"	
+	IFIELD	LAT_DECIMAL,	"",	"%.6f"
+	IFIELD	LON_DECIMAL,	"",	"%.6f"
+	IFIELD	URL,	"",	"%s"
+	IFIELD	GEOCACHE_DIFF,	"",	"%3.1f"		#difficulty
+	IFIELD	GEOCACHE_TERR,	"",	"%3.1f"		#terrain
+	IFIELD	GEOCACHE_CONTAINER,"",	"%s"		#container (not set)
+	IFIELD	ICON_DESCR,	"",	"%s"		#strtype (Geocache-*)
+	IFIELD	TIMET_TIME,	"",	"%ld"		#variable time
+	IFIELD	IGNORE,		"",	"%s"		#ifound
+	IFIELD	IGNORE,		"",	"%s"		#soc
+	IFIELD	IGNORE,		"",	"%s"		#iplaced
+	IFIELD	IGNORE,		"",	"%s"		#placed time
+	IFIELD	IGNORE,		"",	"%s"		#found time
+	IFIELD	IGNORE,		"",	"%s"		#ifound time
+	IFIELD	GEOCACHE_TYPE,	"",	"%s"		#gc.com type
+	IFIELD	GEOCACHE_PLACER, "",	"%s"		#gc.com placer
+	IFIELD	GEOCACHE_HINT,	"",	"%s"		#gc.com hint
+	IFIELD	GEOCACHE_LAST_FOUND, "","%s"		#gc.com last found
+	OFIELD	SHORTNAME,	"",	"%s"
+	OFIELD	DESCRIPTION,	"",	"%s"
+	OFIELD	LAT_DECIMAL,	"",	"%.6f"
+	OFIELD	LON_DECIMAL,	"",	"%.6f"
+	OFIELD	URL,	"",	"%s"
+	OFIELD	GEOCACHE_DIFF,	"",	"%3.1f"		#difficulty
+	OFIELD	GEOCACHE_TERR,	"",	"%3.1f"		#terrain
+	OFIELD	GEOCACHE_CONTAINER,"",	"%s"		#container (not set)
+	EOF
+	# OFIELD	ICON_DESCR,	"",	"%s"
+}
+
+#
+#	csv2csv geo-mystery-file 
+#
+csv2csv() {
+    if [ ! -e "$1" ]; then
+	debug 0 "Don't have a -M '$1' file"
+	touch "$1"
+    fi
+
+    awk -v GEOMYSTERY=$1 '
+    function latlon ( val ) {
+	if (val ~ ".[.]..*[.].*")
+	{
+	    if (val ~ "[-wWsS]")
+	    {
+		val = substr(val, 2)
+		neg = 1
+	    }
+	    else if (val ~ "[nNeE]")
+	    {
+		val = substr(val, 2)
+		neg = 0
+	    }
+	    else
+		neg = 0
+	    dd = int(val)
+	    sub("[^.]*[.]", "", val)
+	    dd += (val+0.0) / 60.0
+	    return neg ? -dd : dd
+	}
+	return val
+    }
+    BEGIN {
+	while (getline <GEOMYSTERY > 0)
+	{
+	    if ($0 ~ "^#")
+		continue
+	    if ($0 ~ "^[ 	]*$")
+		continue
+	    gc=$1
+	    sub(".*/", "", gc)	# remove stuff like http://coord.info/
+	    if ($2 ~ "unk")
+	    {
+		lat[gc] = 48
+		lon[gc] = -88
+	    }
+	    else
+	    {
+		lat[gc] = $2
+		lon[gc] = $3
+	    }
+	}
+	FS="	"
+    }
+    {
+	if (lat[$1] != 0)
+	{
+	    deglat = latlon( lat[$1] )
+	    deglon = latlon( lon[$1] )
+	    # GC# Desc lat lon URL diff terr size
+	    printf "%s\t", $1
+	    printf "+%s\t", $2
+	    printf "%.6f\t%.6f\t", deglat, deglon
+	    for (i = 5; i < NF; ++i)
+		printf "%s\t", $i
+	    printf "%s\n", $NF
+	}
+	else
+	    print
+    }
+    '
+}
+
+#
+#	Fetch the cache patch
+#
+gc_fetch_cache_page(){
+    _page=$1	#out
+    _gcid=$2	#in
+    _url=$3	#in
+    _extra=$4	#in
+
+    # Fetch the basic cache page
+    echo "<BASE HREF=http://www.geocaching.com/seek/>" > $_page
+    debug 1 "${_extra}curl $_url #cache fetch $_gcid.html"
+    curl $CURL_OPTS -L -s -b $COOKIE_FILE -A "$UA" \
+	$_url \
+	| tr -d "\001\007\010\013\017\020\031" \
+	| sed -e '/<\/html>/d' \
+	>> $_page
+
+    size=$(ls -l $_page | awk '{print $5}')
+    if [ $size -lt 1000 ]; then
+	debug 0 "Could not retrieve web page for cache $_gcid"
+	return 1
+    fi
+
+    # JSON for logbooks
+    JSON_NUM=100
+    tkn=`grep "userToken = '" $_page | sed -e "s/userToken = '//" -e "s/'.*//" `
+    jsurl="https://www.geocaching.com/seek/geocache.logbook"
+    jsurl="$jsurl?tkn=$tkn"
+    jsurl="$jsurl&idx=1&num=$JSON_NUM&sp=false&sf=false&decrypt=false"
+    debug 1 "curl $jsurl" >&2
+    curl $CURL_OPTS -s -A "$UA" -b $COOKIE_FILE \
+	 "$jsurl" >> $_page
+    echo "" >> $_page
+    echo "</html>" >> $_page
+    return 0
+}
+
+#
+#	Query the gc website
+#
+gc_query() {
+    if [ $USERFOUND = 0 ]; then
+	FOUND=1
+    fi
+    if [ $FOUND = 0 ]; then
+	    SEARCH="$SEARCH&f=1"
+    fi
+    if [ "$RADIUS_NUM" != "" ]; then
+	    SEARCH="$SEARCH&dist=$RADIUS_MILES"
+    fi
+
+    if [ $DEBUG -gt 0 ]; then
+	TMP=/tmp/geo
+    else
+	TMP=/tmp/geo$$
+    fi
+
+    HTMLPAGE=$TMP.page
+    CIDFILE=$TMP.cids
+    LOCFILE=$TMP.loc
+    LOCTMPFILE=$TMP.tmp
+    XTRAFILE=$TMP.xtra
+    CSVFILE=$TMP.csv
+    CSVFILE2=$TMP.csv2
+    JOINFILE=$TMP.join
+    MERGEFILE=$TMP.merge
+    ARCHFILE=$TMP.arch
+    OUTWAY=$TMP.way
+    STYLE=$TMP.newstyle
+
+    CRUFT="$CRUFT $HTMLPAGE"
+    CRUFT="$CRUFT $CIDFILE"
+    CRUFT="$CRUFT $LOCFILE"
+    CRUFT="$CRUFT $LOCTMPFILE"
+    CRUFT="$CRUFT $XTRAFILE"
+    CRUFT="$CRUFT $CSVFILE"
+    CRUFT="$CRUFT $CSVFILE2"
+    CRUFT="$CRUFT $JOINFILE"
+    CRUFT="$CRUFT $MERGEFILE"
+    CRUFT="$CRUFT $ARCHFILE"
+    CRUFT="$CRUFT $OUTWAY"
+    CRUFT="$CRUFT $STYLE"
+    if [ $NOCOOKIES = 1 ]; then
+	CRUFT="$CRUFT $COOKIE_FILE"
+    fi
+
+    #
+    #	Login to gc.com
+    #
+    gc_login "$USERNAME" "$PASSWORD"
+
+    #
+    #	Find the bookmark
+    #
+    #   New style:
+    #		https://www.geocaching.com/bookmarks/view.aspx?code=BM52955
+    #
+    if [ "$BOOKMARK" != "" ]; then
+	URL="$GEOS/bookmarks"
+	case "$BOOKMARK" in
+	BM*)
+		SEARCH="bookmarks/view.aspx?code=$BOOKMARK"
+		;;
+	*)
+	    debug 1 "$start: curl $URL #bookmark"
+	    SEARCH=`
+		curl $CURL_OPTS -L -s -b $COOKIE_FILE -A "$UA" "$URL" \
+		| grep -y ">$BOOKMARK<" \
+		| $sed \
+		    -e 's@. title.*@@' \
+		    -e 's@^.*href=.https://www.geocaching.com/b@b@' \
+		    -e 's/.>.*$//'
+		`
+	    case "$SEARCH" in
+	    *bookmarks*) 	;;
+	    *)		error "No bookmark with the name '$BOOKMARK'.";;
+	    esac
+	    ;;
+	esac
+    fi
+
+    #
+    #	Find the pocket query
+    #
+    if [ "$POCKETQUERY" != "" ]; then
+	URL="$GEOS/pocket/default.aspx"
+	debug 1 "$start: curl $URL #pocket-query"
+	SEARCH=`
+	    curl $CURL_OPTS -L -s -b $COOKIE_FILE -A "$UA" "$URL" \
+	    | grep -y "title=\"$POCKETQUERY\"" \
+	    | $sed \
+		-e 's@.*guid=@@' -e 's@".*@@'
+	    `
+	case "$SEARCH" in
+	*-*-*-*-*)	SEARCH="?pq=$SEARCH";;
+	*)		error "No PQ with the name '$POCKETQUERY'.";;
+	esac
+    fi
+
+    #
+    #	We might combine one or more pages into a single XML, so cobble
+    #	up a header with the ?xml and loc tags.
+    #	
+    cat <<-EOF > $LOCFILE
+	<?xml version="1.0" encoding="UTF-8"?>
+	<loc version="1.0" src="EasyGPS">
+	EOF
+
+    #
+    # Loop, getting at least "NUM" locations
+    #
+    ((NUM=NUM-1))
+    if [ $DEBUG -gt 0 ]; then
+	filter2="tee $TMP.bulk"
+    else
+	filter2=cat
+    fi
+
+    subscriber=1
+    > $XTRAFILE
+    > $ARCHFILE
+    ((start=0))
+    while ((start <= NUM)); do
+	sleep $GEOSLEEP
+
+	#
+	# Fetch the page of closest caches and scrape the cache ID's
+	#
+	case "$SEARCH" in
+	*bookmark*)
+	    URL="$GEOS/$SEARCH"
+	    ;;
+	*)
+	    URL="$GEOS/seek/nearest.aspx"
+	    URL="$URL$SEARCH"
+	    ;;
+	esac
+	debug 1 "$start: curl $URL #list"
+	if ((start > 0)); then
+	    # "postback"... grab the "next" button
+	    case "$SEARCH" in
+	    *bookmark*)
+		# __EVENTTARGET="ListInfo\$pgrBMItems\$_ctl08"
+		# Get the last TGT (== ctl08)
+                TGT=$($sed -n "s/^.*__doPostBack('.*pgrBMItems\$\(.*\)','.*/\1/p" \
+                    < $HTMLPAGE)
+		if [ "$TGT" = "" ]; then
+		    error "TGT is blank!"
+		fi
+                __EVENTTARGET="ctl00%24ContentBody%24ListInfo%24pgrBMItems%24$TGT"
+		;;
+	    *)
+                TGT=$($sed -n "s/^.*__doPostBack('.*pgrTop\$\(.*\)','.*/\1/p" \
+                    < $HTMLPAGE)
+		if [ "$TGT" = "" ]; then
+		    error "TGT is blank!"
+		fi
+                __EVENTTARGET="ctl00%24ContentBody%24pgrTop%24$TGT"
+		;;
+	    esac
+	    if ((start <= 20)); then
+		# Just print one only!
+		debug 2 "if (start > 1)" 
+		debug 2 "__EVENTTARGET=$__EVENTTARGET" 
+		debug 2 "viewstate=$viewstate" 
+	    fi
+	    curl $CURL_OPTS -L -s -b $COOKIE_FILE -A "$UA" \
+		-d __EVENTARGUMENT="" \
+		-d __EVENTTARGET="$__EVENTTARGET" \
+		-d __LASTFOCUS="" \
+		$viewstate \
+		"$URL" \
+		| $sed -e "s/&#39;/'/g" -e "s/\r//" > $HTMLPAGE
+	else
+	    debug 2 "if (start == 0)" 
+	    curl $CURL_OPTS -L -s -b $COOKIE_FILE -A "$UA" \
+		"$URL" \
+		| $sed -e "s/&#39;/'/g" -e "s/\r//" > $HTMLPAGE
+	    if [ "$DEBUG" -ge 1 ]; then
+		grep "PageBuilderWidget.*Top.*" $HTMLPAGE |
+		    sed -e "s/<.b>.*//" -e "s/^.*span>//" -e "s/<b>//" 1>&2
+	    fi
+	fi
+	rc=$?; if [ $rc != 0 ]; then
+	    error "curl: fetch $URL"
+	fi
+	if grep -s -q "We encountered an error when requesting that page!" \
+	    $HTMLPAGE; then
+	    error "searching error (1) on $start"
+	fi
+	if grep -s -q "has resulted in an error" \
+	    $HTMLPAGE; then
+	    error "searching error (2) on $start"
+	fi
+	if grep -s -q "By State" $HTMLPAGE; then
+	    error "searching gave up on $start"
+	fi
+	if grep -s -q ">Advanced Search<" $HTMLPAGE; then
+	    error "need a country AND a state!"
+	fi
+
+	#
+	# Grab a few important values from the page
+	#
+	gc_getviewstate $HTMLPAGE
+	# cp $HTMLPAGE /tmp/view$start.html
+
+	#
+	# Grab the CIDs into two categories: found and notfound
+	#
+	> $CIDFILE
+	debug 3 "getcids $HTMLPAGE $CIDFILE $XTRAFILE $ARCHFILE $((NUM-start))"
+	getcids $HTMLPAGE $CIDFILE $XTRAFILE $ARCHFILE $((NUM-start))
+
+	#
+	# Fetch the waypoints, rip out the ?xml and loc tags, and
+	# append to the $LOCFILE file.
+	#
+	if [ -s "$CIDFILE" ]; then
+	    sleep $GEOSLEEP
+	    # RER: Bug for 04/20/16, use https instead of http!
+	    case "$SEARCH" in
+	    *bookmark*)
+		URL="$GEOS/$SEARCH"
+		;;
+	    *)
+		URL="$GEOS/seek/nearest.aspx"
+		URL="$URL$SEARCH"
+		;;
+	    esac
+	    #
+	    #	Fetch the .loc file
+	    #	1)	-d "Download=Download+Waypoints"...	geo-nearest
+	    #	2)	-d "ListInfo:btnDownload=	...	old
+	    #	3)	-d 'ctl00$ContentBody		...	-b acro
+	    #	4)	-d 'ctl00$ContentBody$uxDownloadLoc=Download+Waypoints'
+	    #
+	    debug 2 "$start: curl $URL #loc"
+	    curl $CURL_OPTS -s -b $COOKIE_FILE -A "$UA" \
+		$viewstate \
+		`cat $CIDFILE` \
+		-d "Download=Download+Waypoints" \
+		-d "ListInfo:btnDownload=Download+to+.Loc" \
+		-d 'ctl00$ContentBody$ListInfo$btnDownload=Download+to+.Loc' \
+		-d 'ctl00$ContentBody$uxDownloadLoc=Download+Waypoints' \
+		"$URL" \
+	    | $filter2 \
+	    | $sed -e 's/^<?xml [^>]*>//' \
+		    -e 's/>[gG]eocache</>Geocache</g' \
+		    -e 's/<loc [^>]*>//' \
+		    -e 's#</loc>##' \
+		    -e 's###g' \
+		    > $LOCTMPFILE
+	    rc=$?; if [ $rc != 0 ]; then
+		error "curl: fetch the waypoints"
+	    fi
+	    if grep -s -q "you are not logged in" $LOCTMPFILE; then
+		error "you are not logged in on $start"
+	    fi
+	    if grep -s -q "has resulted in an error" $LOCTMPFILE; then
+		error "searching error (3) on $start"
+	    fi
+	    if grep -s -q "Geocaching > Search for Geocaches" $LOCTMPFILE; then
+		error "searching error (4) on $start"
+	    fi
+	    #
+	    # 04/12/2018: Basic members
+	    #
+	    if ! grep -s -q "<difficulty>" $LOCTMPFILE; then
+		#
+		# Basic members: do it the SLOW way
+		#
+		if [ "$GEODIR" != "" -a ! -d "$GEODIR" ]; then
+		    mkdir "$GEODIR" || error "Couldn't mkdir $GEODIR"
+		fi
+		if [ "$GEODIR/caches" != "" -a ! -d "$GEODIR/caches" ]; then
+		    mkdir "$GEODIR/caches" \
+			|| error "Couldn't mkdir $GEODIR/caches"
+		fi
+
+		if [ $subscriber = 1 ]; then
+		    debug 0 "Basic Member: pay the \$30/yr fee for Premium Member!"
+		    debug 0 "Basic Member: doing it the REAL SLOW way!!!"
+		    timestamp="$GEODIR/caches/.timestamp"
+		    $touch -d "$CACHE_CACHE_MAX_AGE ago" $timestamp
+		fi
+		subscriber=0
+
+		#
+		# Pull 20 GCIDs...
+		#
+		bstart=$start
+		grep "^ *GC.*" $HTMLPAGE \
+		| $sed -e "s/ //g" \
+		| while read gcid; do
+		    #
+		    #	Get the cache page
+		    #
+		    cachepage="$GEODIR/caches/$gcid.html"
+		    if [ ! -s $cachepage -o $timestamp -nt $cachepage ]; then
+			# cache page doesn't exist or out of date
+			sleep 3 #$GEOSLEEP
+
+			urlpage="https://www.geocaching.com"
+			urlpage="$urlpage/seek/cache_details.aspx"
+			urlpage="$urlpage?log=y&wp=$gcid"
+			gc_fetch_cache_page $cachepage $gcid $urlpage \
+			    "$bstart: "
+			if [ $? != 0 ]; then
+			    continue
+			fi
+		    fi
+		    
+		    #debug 0 "ZZZZ $cachepage"
+		    
+		    # 01/07/12: remove soc's!
+		    if grep -q 'alt="Premium Members only"' $cachepage; then
+			continue
+		    fi
+		    # 12/18/12: remove soc's
+		    if grep -q 'uxPremiumSubmitBottom' $cachepage; then
+			continue
+		    fi
+		    # 02/12/16: remove soc's
+		    if grep -q 'class="pmo-banner"' $cachepage; then
+			continue
+		    fi
+		    # 05/11/19: remove soc's
+		    if grep -q 'class="premium-upgrade-widget"' $cachepage; then
+			continue
+		    fi
+		    # 04/28/17: remove archived
+		    if grep -q '<strike><font' $cachepage; then
+			continue
+		    fi
+		    if grep -q '<\/strike><\/font' $cachepage; then
+			continue
+		    fi
+		    if grep -q 'class=".*Warning Strike.*">' $cachepage; then
+			continue
+		    fi
+
+		    #
+		    #	Cobble up the .loc file entry
+		    #
+		    name=` grep -A1 "<head><title>" $cachepage \
+			| tail -1 | tr -d "\r"  \
+			| $sed -e 's/[ 	]*GC[^ ]* //' -e 's/ (.*by/ by/' `
+		    diff=` grep ctl00_ContentBody_uxLegendScale $cachepage \
+			| $sed -e 's/.*alt="//' -e 's/ .*//' `
+		    terr=` grep ctl00_ContentBody_Localize $cachepage \
+			| $sed -e 's/.*alt="//' -e 's/ .*//' `
+		    size=` grep "alt=.Size:" $cachepage \
+			| $sed -e 's/.*alt="Size: //' -e 's/" .*//' `
+		    case $size in
+		    Unknown)	cont=1;;
+		    Micro)	cont=2;;
+		    Regular)	cont=3;;
+		    Large)	cont=4;;
+		    Virtual)	cont=5;;
+		    Other)	cont=6;;
+		    Small)	cont=8;;
+		    *)		cont=1;;
+		    esac
+
+		    #<waypoint>
+		    #<name id="GCGFTA"><![CDATA[Bridge by Eagle Son]]></name>
+		    #<coord lat="41.6965166666667" lon="-88.1080166666667"/>
+		    #<type>Geocache</type>
+		    #<link text="Cache Details">http://www.geocaching.com/seek/cache_details.aspx?wp=GCGFTA</link>
+		    #</waypoint>
+		    echo "<waypoint>"
+		    echo "<name id=\"$gcid\"><![CDATA[$name]]></name>"
+		    grep "^var lat=.*guid=" $cachepage \
+			| sed -e 's/var /<coord /' -e 's/lat=/&"/' \
+			    -e 's/lng=/lon="/' -e 's@ guid.*@/>@' -e 's/,/"/g'
+		    echo "<type>Geocache</type>"
+		    printf "<link text=\"Cache Details\">"
+		    urlpage="http://www.geocaching.com"
+		    urlpage="$urlpage/seek/cache_details.aspx"
+		    urlpage="$urlpage?wp=$gcid"
+		    printf "$urlpage"
+		    echo "</link>"
+		    echo "<difficulty>$diff</difficulty>"
+		    echo "<terrain>$terr</terrain>"
+		    echo "<container>$cont</container>"
+		    echo "</waypoint>"
+
+		    debug 3 "bstart: $bstart"
+		    if [ $bstart == $NUM ]; then
+			break
+		    fi
+		    ((++bstart))
+		    #break
+		done >> $LOCFILE
+	    else
+		cat $LOCTMPFILE >> $LOCFILE
+	    fi
+	fi
+
+	#
+	# Check to see if the user hasn't agreed to license terms
+	#
+	if grep -s -q "lblAgreementText" $LOCFILE; then
+		easy_warning >&2
+		remove_cruft
+		exit
+	fi
+
+	((start=start+20))
+
+	# If the Next button is disabled, break this loop
+	# grep "Records: <b>[1-9].*disabled.><b>Next<" $HTMLPAGE
+	# if grep -s -q "Records: <b>[1-9].*disabled.><b>Next " $HTMLPAGE; then
+	# RER: 05/26/13 changed... works with any language!
+	# RER: 10/16/16 changed... disabled is Disabled
+	if grep -s -q \
+	"<span>[^:]*: <b>[0-9]\+</b>.*[nN]et[dD]isabled.><b>[^<]*</b></a></td>" \
+	    $HTMLPAGE; then
+	    # echo "$start: dis"
+	    break;
+	fi
+    done
+
+    #
+    # Finish off the .loc file
+    #
+    echo "</loc>" >> $LOCFILE
+
+    #
+    #	Convert the .loc data to .csv format and join it with
+    #	the extra data scraped from the HTML page.  Filter out
+    #	the data according to the -I and -X options.
+    #
+    # http://www.geocaching.com/seek/cache_details.aspx?wp=GCG2H4
+    # http://www.geocaching.com/seek/cache_details.aspx?log=y&wp=GCG2H4
+    # http://www.geocaching.com/seek/cache_details.aspx?ID=92117&log=y
+    #
+    # The joined .csv format looks like this:
+    #	GCH636	Jidana 3 by rickrich	44.94520	-93.47540 \
+    #	http://www.geocaching.com/seek/cache_details.aspx?log=y&wp=GCH636 \
+    #	Geocache-ifound-regular	1070285077	1	0	1 \
+    #	1067925600	1070285077	0
+    #
+    make_scrape_style > $STYLE
+
+    dbgcmd gpsbabel -i geo$GEONUKE -f $LOCFILE \
+	-o xcsv,style=$STYLE -F $CSVFILE2
+    if [ $? != 0 ]; then
+	cp $LOCFILE /tmp/geo.err
+	error "gpsbabel returned error code [1]"
+    fi
+
+    # Convert CSV into CSV with puzzles...
+    csv2csv $GEOMYSTERY < $CSVFILE2 > $CSVFILE
+
+    # 01/07/12: NO --nocheck-order; it is wrong!
+    join -t '	' $CSVFILE $XTRAFILE > $JOINFILE
+    if [ $? != 0 ]; then
+	cp $CSVFILE /tmp/geo.err.csv
+	cp $XTRAFILE /tmp/geo.err.xtra
+	error "joined file error: see join /tmp/geo.err.{csv,xtra}"
+    fi
+    egrep -- "$INCLUDE" < $JOINFILE \
+    | egrep -v -- "$EXCLUDE" \
+    | $sed -e 's/wp=/log=y\&&/' > $MERGEFILE
+
+    if [ $FOUND = 1 ]; then
+	cat $ARCHFILE \
+	| egrep -- "$INCLUDE" | egrep -v -- "$EXCLUDE" \
+	| $sed -e 's/wp=/log=y\&&/' >> $MERGEFILE
+    fi
+
+    if [ $DEBUG -ge 2 ]; then
+	# First two of these should be the same number of lines!
+	wc -l $CSVFILE >&2
+	wc -l $XTRAFILE >&2
+	wc -l $MERGEFILE >&2
+    fi
+
+    #
+    # Convert to the desired format
+    #
+    BABELFILT=
+    if [ "$RADIUS" != "" ]; then
+	BABELFILT="-x radius,distance=$RADIUS,lat=$LAT,lon=$LON"
+    fi
+
+    if [ $SQL = 1 ]; then
+	    #
+	    # add it via mysql
+	    #
+	    if [ "$OUTFILE" != "" ]; then
+		>"$OUTFILE"
+	    fi
+
+	    if [ $PURGE = 1 ]; then
+		gpsdrive_purge | gpsdrive_mysql
+		PURGE=2
+	    fi
+
+	    dbgcmd gpsbabel $BABELFLAGS \
+		-i xcsv,style=$STYLE -f $MERGEFILE \
+		$BABELFILT -o "$OUTFMT" -F $OUTWAY
+	    if [ $? != 0 ]; then
+		error "gpsbabel returned error code [2]"
+	    fi
+	    gpsdrive_add <$OUTWAY $SQLTAG | gpsdrive_mysql
+    elif [ $MAP = 1 ]; then
+	    dbgcmd gpsbabel $BABELFLAGS \
+		-i xcsv,style=$STYLE -f $MERGEFILE \
+		$BABELFILT -o "$OUTFMT" -F $OUTWAY
+	    if [ $? != 0 ]; then
+		error "gpsbabel returned error code [3]"
+	    fi
+	    if [ "$OUTFILE" = "" ]; then
+		dbgcmd geo-map -s0 $MAPOPTS -t$OUTWAY
+	    else
+		dbgcmd geo-map -s0 $MAPOPTS -t$OUTWAY -o"$OUTFILE"
+	    fi
+    else
+	    #
+	    # output to stdout or to a file
+	    #
+	    if [ "$OUTFILE" = "" ]; then
+		OUTTMP="$TMP.way";  CRUFT="$CRUFT $OUTTMP"
+		dbgcmd gpsbabel $BABELFLAGS \
+		    -i xcsv,style=$STYLE -f $MERGEFILE \
+		    $BABELFILT -o "$OUTFMT" -F $OUTTMP
+		if [ $? != 0 ]; then
+		    error "gpsbabel returned error code [4]"
+		fi
+		cat $OUTTMP
+	    else
+		dbgcmd gpsbabel $BABELFLAGS \
+		    -i xcsv,style=$STYLE -f $MERGEFILE \
+		    $BABELFILT -o "$OUTFMT" -F $OUTFILE
+		if [ $? != 0 ]; then
+		    error "gpsbabel returned error code [5]"
+		fi
+	    fi
+    fi
+
+    #
+    #	Optionally, print the HTML pages
+    #
+    if [ "$CMDPIPE" != "" ]; then
+        OIFS="$IFS"
+        IFS="	"
+	while read id desc lat lon url diff terr container strtype \
+	    vartime ifound soc iplaced placedt foundt ifoundt extra; do
+            url="$url&decrypt=y"
+            echo "Print: $url"
+	    HTMLPAGE2=$TMP.html
+	    CRUFT="$CRUFT $HTMLPAGE2"
+	    debug 1 "curl $url" >&2
+	    dbgcmd curl $CURL_OPTS -s -A "$UA" -b $COOKIE_FILE "$url" > $HTMLPAGE2
+            htmldoc --quiet -t ps --nup 2 --fontsize 14 --webpage $HTMLPAGE2 \
+                | psselect -q -p1-1 | eval $CMDPIPE
+            # exit
+        done < $MERGEFILE
+        IFS="$OIFS"
+    fi
+
+    #
+    #	Optionally, fetch printable HTML pages
+    #
+    if [ "$HTMLDIR" != ""  -o "$LOGDIR" != "" ]; then
+	if [ "$HTMLDIR" != "" -a ! -d "$HTMLDIR" ]; then
+	    mkdir "$HTMLDIR" || error "Couldn't mkdir $HTMLDIR"
+	fi
+	if [ "$LOGDIR" != "" -a ! -d "$LOGDIR" ]; then
+	    mkdir "$LOGDIR" || error "Couldn't mkdir $LOGDIR"
+	fi
+
+	HTMLPAGE2=$TMP.html
+	CRUFT="$CRUFT $HTMLPAGE2"
+	TIMESTAMP=$TMP.time
+	CRUFT="$CRUFT $TIMESTAMP"
+
+	fetchcnt=0
+	fetchmax=1000
+	if [ $DEBUG -ge 3 ]; then
+	    fetchmax=3
+	fi
+	OIFS="$IFS"
+	IFS="	"
+	while read id desc lat lon url diff terr container strtype \
+	    vartime ifound soc iplaced placedt foundt ifoundt extra; do
+	    #
+	    #	Don't fetch page if we already have a current version
+	    #
+	    #debug 1 "placedt=<$placedt> <$foundt>"
+	    if [ $placedt -gt $foundt ]; then
+		filetime="$placedt"
+	    else
+		filetime="$foundt"
+	    fi
+	    $touch -d "1/1/70 $filetime seconds last second" $TIMESTAMP
+	    if [ "$filetime" -gt 0 -a "$HTMLDIR/$id.html" -nt $TIMESTAMP ]; then
+		continue
+	    fi
+
+	    # Basic member...
+	    if [ "$subscriber" == 0 -a "$HTMLDIR" != "" ]; then
+		debug 2 "cp $GEODIR/caches/$id.html $HTMLDIR/$id.html"
+		cp "$GEODIR/caches/$id.html" "$HTMLDIR/$id.html"
+		# debug 2 "f: $filetime"
+		if [ "$filetime" -gt 0 ]; then
+		    $touch -d "1/1/70 $filetime seconds" "$HTMLDIR/$id.html"
+		fi
+		continue
+	    fi
+
+	    # Limit to 1000 caches/day
+	    ((fetchcnt=fetchcnt+1))
+	    if [ $fetchcnt -gt $fetchmax ]; then
+		error "Fetch count exceeded $fetchmax.  Try tomorrow!"
+	    fi
+
+	    # Be kind to the server.  Do not remove this sleep
+	    sleep $GEOSLEEP
+
+	    # Bug in gpsbabel 1.5.2 ...
+	    url=`echo "$url" | sed 's/.*http:/http:/g' `
+
+	    gc_fetch_cache_page $HTMLPAGE $id $url ""
+	    if [ $? != 0 ]; then
+		continue
+	    fi
+
+	    if [ "$HTMLDIR" != "" ]; then
+		cp $HTMLPAGE "$HTMLDIR/$id.html" ||
+		    error "Couldn't copy $id cache page"
+		if [ "$filetime" -gt 0 ]; then
+		    $touch -d "1/1/70 $filetime seconds" "$HTMLDIR/$id.html"
+		fi
+	    fi
+
+	    if [ "$LOGDIR" != "" ]; then
+		$sed -e '1,/Logged Visits/d' \
+		    -e 's/<strong><img src=/\
+&/g' \
+		    < $HTMLPAGE |
+		egrep ">$LOGUSERNAME<|strong> \($LOGUSERNAME\) \(" |
+		$sed -e 's#<a href="log.aspx?LUID.*##' \
+		    -e 's#<a href=./profile[^ ]*##' \
+		    > $HTMLPAGE2
+		lynx -dump $HTMLPAGE2 > $LOGDIR/$id.log
+		if [ "$filetime" -gt 0 ]; then
+		    $touch -d "1/1/70 $filetime seconds" "$LOGDIR/$id.log"
+		fi
+	    fi
+	done < $MERGEFILE
+	IFS="$OIFS"
+
+	if [ "$LOGDIR" != "" ]; then
+	    # This is a hack, and might be inaccurate
+	    printf "Finds:" >&2
+	    MONTHS="  January |  February |  March |  April |  May |  June "
+	    MONTHS="$MONTHS|  July |  August | September |  October "
+	    MONTHS="$MONTHS|  November |  December "
+	    egrep "$MONTHS" $LOGDIR/*.log |
+	    egrep "Found it  |icon_smile|icon_happy|icon_camera" | wc -l >&2
+	fi
+
+    fi
+}
+
+##############################################################################
+# end #include "geo-common-gc"
+##############################################################################
+
+#
+#       Set default options, can be overriden on command line or in rc file
+#
+PQURL="https://www.geocaching.com/pocket/gcquery.aspx"
+UPDATE_URL=$WEBHOME/geo-demand
+UPDATE_FILE=geo-demand.new
+outputEmail=
+CTL="ctl00%24ContentBody%24"
+
+
+read_rc_file
+
+#
+#       Process the options
+#
+NUM=1000
+NUM=500
+RADIUS=500
+RADIUS_NUM=500
+RADIUS_UNITS=mi
+WAIT=0
+KILL=
+PQDELETE=1
+TERR="1+"
+DIFF="1+"
+TIME=none
+TYPES=
+CONTS=
+THATS=
+ATTRS=
+tbName=DemandQuery1
+cbDifficulty=
+cbTerrain=
+unzip="-d ${CTL}cbZip=on"
+# instant output options
+FOUND=1
+USERFOUND=1
+HTMLDIR=
+LOGDIR=
+OUTFILE=
+OUTFMT=
+PURGE=0
+DELETE=0
+SQL=0
+MAP=0
+
+while getopts "a:fFo:O:H:k:L:cd:e:t:T:n:N:q:p:r::u:wWzD:Uh?-" opt
+do
+    case $opt in
+    c)	NOCOOKIES=1;;
+    e)	outputEmail="$OPTARG";;
+    k)	KILL="$OPTARG";;
+    z)	unzip="";;
+    d)	DIFF="$OPTARG"; cbDifficulty="-d${CTL}cbDifficulty=on";;
+    t)	TERR="$OPTARG"; cbTerrain="-d${CTL}cbTerrain=on";;
+    T)	TIME="$OPTARG";;
+    n)	NUM="$OPTARG"
+	case "$NUM" in
+	[0-9]*)	;;
+	*)	error "Not a number: '$NUM'";;
+	esac
+	;;
+    N)	QNUM="$OPTARG"
+	case "$OPTARG" in
+	[0-9]*)	tbName="DemandQuery$OPTARG";;
+	*)	tbName="`urlencode2 "$OPTARG"`";;
+	esac
+	;;
+    r)	RADIUS="$OPTARG"
+	RADIUS_NUM=`awk -v "N=$RADIUS" 'BEGIN{printf "%d\n", N}'`
+	case "$RADIUS" in
+	*km*|*KM*)      RADIUS_UNITS=km;;
+	*)              RADIUS_UNITS=mi;;
+	esac
+	;;
+    w)	WAIT=1;;
+    W)	PQDELETE=0;;
+    a)
+	attrs=`echo "$OPTARG" | sed 's/,/ /g' | tr '[A-Z]' '[a-z]' `
+	AA=AttributesListControl1:dtlAttributeIcons:_ctl0:hidInput
+	AA=AttributesListControl1:dtlAttributeIcons:_ctl
+	AA="${CTL}ctlAttrInclude%24dtlAttributeIcons%24ctl"
+	for a in $attrs; do
+	    case "$a" in
+	    # BEGIN 2017/03/31 src2attr -d ...
+	    scenic)                ATTRS="$ATTRS -d${AA}00%24hidInput=1";;
+	    ~scenic)               ATTRS="$ATTRS -d${AA}00%24hidInput=2";;
+	    dogs)                  ATTRS="$ATTRS -d${AA}01%24hidInput=1";;
+	    ~dogs)                 ATTRS="$ATTRS -d${AA}01%24hidInput=2";;
+	    fee)                   ATTRS="$ATTRS -d${AA}02%24hidInput=1";;
+	    ~fee)                  ATTRS="$ATTRS -d${AA}02%24hidInput=2";;
+	    rappelling)            ATTRS="$ATTRS -d${AA}03%24hidInput=1";;
+	    ~rappelling)           ATTRS="$ATTRS -d${AA}03%24hidInput=2";;
+	    boat)                  ATTRS="$ATTRS -d${AA}04%24hidInput=1";;
+	    ~boat)                 ATTRS="$ATTRS -d${AA}04%24hidInput=2";;
+	    scuba)                 ATTRS="$ATTRS -d${AA}05%24hidInput=1";;
+	    ~scuba)                ATTRS="$ATTRS -d${AA}05%24hidInput=2";;
+	    kids)                  ATTRS="$ATTRS -d${AA}06%24hidInput=1";;
+	    ~kids)                 ATTRS="$ATTRS -d${AA}06%24hidInput=2";;
+	    onehour)               ATTRS="$ATTRS -d${AA}07%24hidInput=1";;
+	    ~onehour)              ATTRS="$ATTRS -d${AA}07%24hidInput=2";;
+	    climbing)              ATTRS="$ATTRS -d${AA}08%24hidInput=1";;
+	    ~climbing)             ATTRS="$ATTRS -d${AA}08%24hidInput=2";;
+	    wading)                ATTRS="$ATTRS -d${AA}09%24hidInput=1";;
+	    ~wading)               ATTRS="$ATTRS -d${AA}09%24hidInput=2";;
+	    swimming)              ATTRS="$ATTRS -d${AA}10%24hidInput=1";;
+	    ~swimming)             ATTRS="$ATTRS -d${AA}10%24hidInput=2";;
+	    available)             ATTRS="$ATTRS -d${AA}11%24hidInput=1";;
+	    ~available)            ATTRS="$ATTRS -d${AA}11%24hidInput=2";;
+	    night)                 ATTRS="$ATTRS -d${AA}12%24hidInput=1";;
+	    ~night)                ATTRS="$ATTRS -d${AA}12%24hidInput=2";;
+	    winter)                ATTRS="$ATTRS -d${AA}13%24hidInput=1";;
+	    ~winter)               ATTRS="$ATTRS -d${AA}13%24hidInput=2";;
+	    cliff)                 ATTRS="$ATTRS -d${AA}14%24hidInput=1";;
+	    ~cliff)                ATTRS="$ATTRS -d${AA}14%24hidInput=2";;
+	    hunting)               ATTRS="$ATTRS -d${AA}15%24hidInput=1";;
+	    ~hunting)              ATTRS="$ATTRS -d${AA}15%24hidInput=2";;
+	    danger)                ATTRS="$ATTRS -d${AA}16%24hidInput=1";;
+	    ~danger)               ATTRS="$ATTRS -d${AA}16%24hidInput=2";;
+	    wheelchair)            ATTRS="$ATTRS -d${AA}17%24hidInput=1";;
+	    ~wheelchair)           ATTRS="$ATTRS -d${AA}17%24hidInput=2";;
+	    camping)               ATTRS="$ATTRS -d${AA}18%24hidInput=1";;
+	    ~camping)              ATTRS="$ATTRS -d${AA}18%24hidInput=2";;
+	    bicycles)              ATTRS="$ATTRS -d${AA}19%24hidInput=1";;
+	    ~bicycles)             ATTRS="$ATTRS -d${AA}19%24hidInput=2";;
+	    motorcycles)           ATTRS="$ATTRS -d${AA}20%24hidInput=1";;
+	    ~motorcycles)          ATTRS="$ATTRS -d${AA}20%24hidInput=2";;
+	    quads)                 ATTRS="$ATTRS -d${AA}21%24hidInput=1";;
+	    ~quads)                ATTRS="$ATTRS -d${AA}21%24hidInput=2";;
+	    jeeps)                 ATTRS="$ATTRS -d${AA}22%24hidInput=1";;
+	    ~jeeps)                ATTRS="$ATTRS -d${AA}22%24hidInput=2";;
+	    snowmobiles)           ATTRS="$ATTRS -d${AA}23%24hidInput=1";;
+	    ~snowmobiles)          ATTRS="$ATTRS -d${AA}23%24hidInput=2";;
+	    campfires)             ATTRS="$ATTRS -d${AA}24%24hidInput=1";;
+	    ~campfires)            ATTRS="$ATTRS -d${AA}24%24hidInput=2";;
+	    poisonoak)             ATTRS="$ATTRS -d${AA}25%24hidInput=1";;
+	    ~poisonoak)            ATTRS="$ATTRS -d${AA}25%24hidInput=2";;
+	    thorn)                 ATTRS="$ATTRS -d${AA}26%24hidInput=1";;
+	    ~thorn)                ATTRS="$ATTRS -d${AA}26%24hidInput=2";;
+	    dangerousanimals)      ATTRS="$ATTRS -d${AA}27%24hidInput=1";;
+	    ~dangerousanimals)     ATTRS="$ATTRS -d${AA}27%24hidInput=2";;
+	    ticks)                 ATTRS="$ATTRS -d${AA}28%24hidInput=1";;
+	    ~ticks)                ATTRS="$ATTRS -d${AA}28%24hidInput=2";;
+	    mine)                  ATTRS="$ATTRS -d${AA}29%24hidInput=1";;
+	    ~mine)                 ATTRS="$ATTRS -d${AA}29%24hidInput=2";;
+	    parking)               ATTRS="$ATTRS -d${AA}30%24hidInput=1";;
+	    ~parking)              ATTRS="$ATTRS -d${AA}30%24hidInput=2";;
+	    public)                ATTRS="$ATTRS -d${AA}31%24hidInput=1";;
+	    ~public)               ATTRS="$ATTRS -d${AA}31%24hidInput=2";;
+	    picnic)                ATTRS="$ATTRS -d${AA}32%24hidInput=1";;
+	    ~picnic)               ATTRS="$ATTRS -d${AA}32%24hidInput=2";;
+	    horses)                ATTRS="$ATTRS -d${AA}33%24hidInput=1";;
+	    ~horses)               ATTRS="$ATTRS -d${AA}33%24hidInput=2";;
+	    water)                 ATTRS="$ATTRS -d${AA}34%24hidInput=1";;
+	    ~water)                ATTRS="$ATTRS -d${AA}34%24hidInput=2";;
+	    restrooms)             ATTRS="$ATTRS -d${AA}35%24hidInput=1";;
+	    ~restrooms)            ATTRS="$ATTRS -d${AA}35%24hidInput=2";;
+	    phone)                 ATTRS="$ATTRS -d${AA}36%24hidInput=1";;
+	    ~phone)                ATTRS="$ATTRS -d${AA}36%24hidInput=2";;
+	    stroller)              ATTRS="$ATTRS -d${AA}37%24hidInput=1";;
+	    ~stroller)             ATTRS="$ATTRS -d${AA}37%24hidInput=2";;
+	    firstaid)              ATTRS="$ATTRS -d${AA}38%24hidInput=1";;
+	    ~firstaid)             ATTRS="$ATTRS -d${AA}38%24hidInput=2";;
+	    cow)                   ATTRS="$ATTRS -d${AA}39%24hidInput=1";;
+	    ~cow)                  ATTRS="$ATTRS -d${AA}39%24hidInput=2";;
+	    stealth)               ATTRS="$ATTRS -d${AA}40%24hidInput=1";;
+	    ~stealth)              ATTRS="$ATTRS -d${AA}40%24hidInput=2";;
+	    landf)                 ATTRS="$ATTRS -d${AA}41%24hidInput=1";;
+	    ~landf)                ATTRS="$ATTRS -d${AA}41%24hidInput=2";;
+	    flashlight)            ATTRS="$ATTRS -d${AA}42%24hidInput=1";;
+	    ~flashlight)           ATTRS="$ATTRS -d${AA}42%24hidInput=2";;
+	    rv)                    ATTRS="$ATTRS -d${AA}43%24hidInput=1";;
+	    ~rv)                   ATTRS="$ATTRS -d${AA}43%24hidInput=2";;
+	    uv)                    ATTRS="$ATTRS -d${AA}44%24hidInput=1";;
+	    ~uv)                   ATTRS="$ATTRS -d${AA}44%24hidInput=2";;
+	    snowshoes)             ATTRS="$ATTRS -d${AA}45%24hidInput=1";;
+	    ~snowshoes)            ATTRS="$ATTRS -d${AA}45%24hidInput=2";;
+	    skiis)                 ATTRS="$ATTRS -d${AA}46%24hidInput=1";;
+	    ~skiis)                ATTRS="$ATTRS -d${AA}46%24hidInput=2";;
+	    s-tool)                ATTRS="$ATTRS -d${AA}47%24hidInput=1";;
+	    ~s-tool)               ATTRS="$ATTRS -d${AA}47%24hidInput=2";;
+	    nightcache)            ATTRS="$ATTRS -d${AA}48%24hidInput=1";;
+	    ~nightcache)           ATTRS="$ATTRS -d${AA}48%24hidInput=2";;
+	    parkngrab)             ATTRS="$ATTRS -d${AA}49%24hidInput=1";;
+	    ~parkngrab)            ATTRS="$ATTRS -d${AA}49%24hidInput=2";;
+	    abandonedbuilding)     ATTRS="$ATTRS -d${AA}50%24hidInput=1";;
+	    ~abandonedbuilding)    ATTRS="$ATTRS -d${AA}50%24hidInput=2";;
+	    hike_short)            ATTRS="$ATTRS -d${AA}51%24hidInput=1";;
+	    ~hike_short)           ATTRS="$ATTRS -d${AA}51%24hidInput=2";;
+	    hike_med)              ATTRS="$ATTRS -d${AA}52%24hidInput=1";;
+	    ~hike_med)             ATTRS="$ATTRS -d${AA}52%24hidInput=2";;
+	    hike_long)             ATTRS="$ATTRS -d${AA}53%24hidInput=1";;
+	    ~hike_long)            ATTRS="$ATTRS -d${AA}53%24hidInput=2";;
+	    fuel)                  ATTRS="$ATTRS -d${AA}54%24hidInput=1";;
+	    ~fuel)                 ATTRS="$ATTRS -d${AA}54%24hidInput=2";;
+	    food)                  ATTRS="$ATTRS -d${AA}55%24hidInput=1";;
+	    ~food)                 ATTRS="$ATTRS -d${AA}55%24hidInput=2";;
+	    wirelessbeacon)        ATTRS="$ATTRS -d${AA}56%24hidInput=1";;
+	    ~wirelessbeacon)       ATTRS="$ATTRS -d${AA}56%24hidInput=2";;
+	    partnership)           ATTRS="$ATTRS -d${AA}57%24hidInput=1";;
+	    ~partnership)          ATTRS="$ATTRS -d${AA}57%24hidInput=2";;
+	    field_puzzle)          ATTRS="$ATTRS -d${AA}58%24hidInput=1";;
+	    ~field_puzzle)         ATTRS="$ATTRS -d${AA}58%24hidInput=2";;
+	    hiking)                ATTRS="$ATTRS -d${AA}59%24hidInput=1";;
+	    ~hiking)               ATTRS="$ATTRS -d${AA}59%24hidInput=2";;
+	    seasonal)              ATTRS="$ATTRS -d${AA}60%24hidInput=1";;
+	    ~seasonal)             ATTRS="$ATTRS -d${AA}60%24hidInput=2";;
+	    touristok)             ATTRS="$ATTRS -d${AA}61%24hidInput=1";;
+	    ~touristok)            ATTRS="$ATTRS -d${AA}61%24hidInput=2";;
+	    treeclimbing)          ATTRS="$ATTRS -d${AA}62%24hidInput=1";;
+	    ~treeclimbing)         ATTRS="$ATTRS -d${AA}62%24hidInput=2";;
+	    frontyard)             ATTRS="$ATTRS -d${AA}63%24hidInput=1";;
+	    ~frontyard)            ATTRS="$ATTRS -d${AA}63%24hidInput=2";;
+	    teamwork)              ATTRS="$ATTRS -d${AA}64%24hidInput=1";;
+	    ~teamwork)             ATTRS="$ATTRS -d${AA}64%24hidInput=2";;
+	    geotour)               ATTRS="$ATTRS -d${AA}65%24hidInput=1";;
+	    ~geotour)              ATTRS="$ATTRS -d${AA}65%24hidInput=2";;
+	    # END 2017/03/31 src2attr -d ...
+	    *)				usage;;
+	    esac
+	done
+	;;
+    q)
+	quals=`echo "$OPTARG" | sed 's/,/ /g' | tr '[A-Z]' '[a-z]' `
+	for q in $quals; do
+	    case "$q" in
+	    trad*)		TYPES="$TYPES -d${CTL}cbTaxonomy%240=on";;
+	    multi*)		TYPES="$TYPES -d${CTL}cbTaxonomy%241=on";;
+	    virtual*)		TYPES="$TYPES -d${CTL}cbTaxonomy%242=on";;
+	    letter*)		TYPES="$TYPES -d${CTL}cbTaxonomy%243=on";;
+	    event*)		TYPES="$TYPES -d${CTL}cbTaxonomy%244=on";;
+	    myst*)		TYPES="$TYPES -d${CTL}cbTaxonomy%245=on";;
+	    APE)		TYPES="$TYPES -d${CTL}cbTaxonomy%246=on";;
+	    web*)		TYPES="$TYPES -d${CTL}cbTaxonomy%247=on";;
+	    earth*)		TYPES="$TYPES -d${CTL}cbTaxonomy%248=on";;
+	    gps*)		TYPES="$TYPES -d${CTL}cbTaxonomy%249=on";;
+	    where*)		TYPES="$TYPES -d${CTL}cbTaxonomy%2410=on";;
+
+	    small)		CONTS="$CONTS -d${CTL}cbContainers%240=on";;
+	    other)		CONTS="$CONTS -d${CTL}cbContainers%241=on";;
+	    none)		CONTS="$CONTS -d${CTL}cbContainers%242=on";;
+	    large)		CONTS="$CONTS -d${CTL}cbContainers%243=on";;
+	    regular)		CONTS="$CONTS -d${CTL}cbContainers%244=on";;
+	    micro)		CONTS="$CONTS -d${CTL}cbContainers%245=on";;
+	    unknown)		CONTS="$CONTS -d${CTL}cbContainers%246=on";;
+
+	    notfound*)		THATS="$THATS -d${CTL}cbOptions%240=on";;
+	    ifound*)		THATS="$THATS -d${CTL}cbOptions%241=on";;
+	    notown*)		THATS="$THATS -d${CTL}cbOptions%242=on";;
+	    iown|own)		THATS="$THATS -d${CTL}cbOptions%243=on";;
+	    notsoc)		THATS="$THATS -d${CTL}cbOptions%244=on";;
+	    *member*|soc)	THATS="$THATS -d${CTL}cbOptions%245=on";;
+	    notign*)		THATS="$THATS -d${CTL}cbOptions%246=on";;
+	    watch*)		THATS="$THATS -d${CTL}cbOptions%247=on";;
+	    found7*)		THATS="$THATS -d${CTL}cbOptions%248=on";;
+	    *unfound*)		THATS="$THATS -d${CTL}cbOptions%249=on";;
+	    *bug*)		THATS="$THATS -d${CTL}cbOptions%2410=on";;
+	    new|update*)	THATS="$THATS -d${CTL}cbOptions%2411=on";;
+	    notactive)		THATS="$THATS -d${CTL}cbOptions%2412=on";;
+	    active)		THATS="$THATS -d${CTL}cbOptions%2413=on";;
+	    esac
+	done
+	;;
+
+    # instant output options
+    o)	OUTFMT="$OPTARG";;
+    O)	OUTFILE="$OPTARG";;
+    H)	HTMLDIR="$OPTARG";;
+    L)	LOGDIR="$OPTARG";;
+    F)	USERFOUND=0;;
+    f)	FOUND=0;;
+
+    u)	USERNAME="$OPTARG";;
+    p)	PASSWORD="$OPTARG";;
+    D)	DEBUG="$OPTARG";;
+    U)	echo "Getting latest version of this script..."
+	curl $CURL_OPTS -o$UPDATE_FILE "$UPDATE_URL"
+	chmod +x "$UPDATE_FILE"
+	echo "Latest version is in $UPDATE_FILE"
+	exit
+	;;
+    h|\?|-) usage;;
+    esac
+done
+shift `expr $OPTIND - 1`
+
+DBGCMD_LVL=2
+if [ $DEBUG -gt 0 ]; then
+    TMP=/tmp/geo
+else
+    TMP=/tmp/geo$$
+fi
+if [ $NOCOOKIES = 1 ]; then
+    CRUFT="$CRUFT $COOKIE_FILE"
+fi
+
+remove_cruft() {
+    exit
+}
+
+#
+#	Main Program
+#
+if [ "$KILL" != "" ]; then
+    REPLY=$TMP-reply.html; CRUFT="$CRUFT $REPLY"
+    REPLY2=$TMP-reply2.html; CRUFT="$CRUFT $REPLY2"
+    gc_login "$USERNAME" "$PASSWORD"
+    PQURL="https://www.geocaching.com/pocket/"
+    dbgcmd curl $CURL_OPTS -s -b $COOKIE_FILE -c $COOKIE_FILE -A "$UA" \
+	"$PQURL" > $REPLY
+
+    gc_getviewstate $REPLY
+
+    grep -A1 "gcquery.aspx.guid" $REPLY | tr -d "\r" |
+	sed -e "s/^.*href=.//g" -e "s/.>.*$//" \
+	>$REPLY2
+    ex - $REPLY2 <<-EOF
+	g/gcquery/j
+	g/^--$/d
+	w
+	q
+	EOF
+    echo =============== Killing ${KILL}
+    exit
+    while read url name; do
+	case "$name" in
+	${KILL}*) echo "Kill: $name"
+		dbgcmd curl $CURL_OPTS -s -b $COOKIE_FILE -c $COOKIE_FILE -A "$UA" \
+		    "$url" > $REPLY
+
+		gc_getviewstate $REPLY
+
+		dbgcmd curl $CURL_OPTS -s -b $COOKIE_FILE -c $COOKIE_FILE -A "$UA" \
+		    $viewstate \
+		    -d __EVENTVALIDATION="$__EVENTVALIDATION" \
+		    -d "${CTL}btnDelete=Delete+This+Query" \
+		    -d "__EVENTTARGET=" \
+		    -d "__EVENTARGUMENT=" \
+		    "$url"  >/dev/null
+		;;
+	esac
+    done <$REPLY2
+    exit
+fi
+
+case "$OUTFMT" in
+map)
+    OUTFMT=tiger,newmarker=grnpin,iconismarker
+    MAP=1
+    ;;
+map,*)
+    MAPOPTS=`echo "$OUTFMT" | sed -n 's/map,\(.*\)$/\1/p'`
+    OUTFMT=tiger,newmarker=grnpin,iconismarker
+    MAP=1
+    ;;
+
+gpsdrive.sql)
+    OUTFMT=gpsdrive
+    SQL=1
+    # DEBUG=1
+    ;;
+\?)
+    gpsbabel_formats
+    exit
+    ;;
+esac
+
+if [ "$TYPES" != "" ]; then
+    Type=rbTypeSelect
+else
+    Type=rbTypeAny
+fi
+if [ "$CONTS" != "" ]; then
+    Container=rbContainerSelect
+else
+    Container=rbContainerAny
+fi
+
+tbGC=GCXXXX
+CountryState=rbNone
+countries=
+states=
+Origin=rbOriginWpt
+while true; do
+    case "$#" in
+    6)
+	    # Cut and paste from geocaching.com cache page
+	    # N 44° 58.630 W 093° 09.310
+	    LAT=`echo "$1$2.$3" | tr -d '\260\302' `
+	    LAT=`latlon $LAT`
+	    LON=`echo "$4$5.$6" | tr -d '\260\302' `
+	    LON=`latlon $LON`
+	    Origin=rbOriginWpt
+	    shift 6
+	    ;;
+    2)
+	    LAT=`latlon $1`
+	    LON=`latlon $2`
+	    Origin=rbOriginWpt
+	    shift 2
+	    ;;
+    1|3)
+	    arg=`echo $1 | tr '[A-Z]' '[a-z]'`
+	    case "$arg" in
+	aargau) states="$states -d${CTL}lbStates=497";;
+	abruzzo) states="$states -d${CTL}lbStates=189";;
+	acre) states="$states -d${CTL}lbStates=162";;
+	aguascalientes) states="$states -d${CTL}lbStates=454";;
+	aichi) states="$states -d${CTL}lbStates=312";;
+	akershus) states="$states -d${CTL}lbStates=240";;
+	akita) states="$states -d${CTL}lbStates=383";;
+	al|alabama) states="$states -d${CTL}lbStates=60";;
+	alagoas) states="$states -d${CTL}lbStates=163";;
+	ak|alaska) states="$states -d${CTL}lbStates=2";;
+	alberta) states="$states -d${CTL}lbStates=63";;
+	amapa) states="$states -d${CTL}lbStates=164";;
+	amazonas) states="$states -d${CTL}lbStates=165";;
+	andalucoa) states="$states -d${CTL}lbStates=116";;
+	antwerpen) states="$states -d${CTL}lbStates=87";;
+	aomori) states="$states -d${CTL}lbStates=313";;
+	appenzell\ ausserrhoden) states="$states -d${CTL}lbStates=498";;
+	appenzell\ innerrhoden) states="$states -d${CTL}lbStates=499";;
+	aragon) states="$states -d${CTL}lbStates=119";;
+	az|arizona) states="$states -d${CTL}lbStates=3";;
+	as|arkansas) states="$states -d${CTL}lbStates=4";;
+	arquipelago\ da\ madeira) states="$states -d${CTL}lbStates=113";;
+	arquipelago\ dos\ acores) states="$states -d${CTL}lbStates=114";;
+	aust-agder) states="$states -d${CTL}lbStates=247";;
+	australian\ capital\ territory) states="$states -d${CTL}lbStates=59";;
+	auvergne-rhone-alpes) states="$states -d${CTL}lbStates=493";;
+	aveiro) states="$states -d${CTL}lbStates=95";;
+	bacs-kiskun) states="$states -d${CTL}lbStates=434";;
+	baden-wurttemberg) states="$states -d${CTL}lbStates=135";;
+	bahia) states="$states -d${CTL}lbStates=166";;
+	baja\ california) states="$states -d${CTL}lbStates=455";;
+	baja\ california\ sur) states="$states -d${CTL}lbStates=456";;
+	banskobystricky\ kraj) states="$states -d${CTL}lbStates=287";;
+	baranya) states="$states -d${CTL}lbStates=435";;
+	basel\ landschaft) states="$states -d${CTL}lbStates=500";;
+	basel\ stadt) states="$states -d${CTL}lbStates=501";;
+	basilicata) states="$states -d${CTL}lbStates=190";;
+	bayern) states="$states -d${CTL}lbStates=136";;
+	beja) states="$states -d${CTL}lbStates=96";;
+	bekes) states="$states -d${CTL}lbStates=436";;
+	berlin) states="$states -d${CTL}lbStates=137";;
+	bern) states="$states -d${CTL}lbStates=502";;
+	blekinge) states="$states -d${CTL}lbStates=359";;
+	bonaire) states="$states -d${CTL}lbStates=523";;
+	borsod-abauj-zemplen) states="$states -d${CTL}lbStates=437";;
+	bourgogne-franche-comte) states="$states -d${CTL}lbStates=488";;
+	brabant\ wallon) states="$states -d${CTL}lbStates=91";;
+	braga) states="$states -d${CTL}lbStates=97";;
+	braganca) states="$states -d${CTL}lbStates=98";;
+	brandenburg) states="$states -d${CTL}lbStates=138";;
+	bratislavsky\ kraj) states="$states -d${CTL}lbStates=288";;
+	bremen) states="$states -d${CTL}lbStates=139";;
+	bretagne) states="$states -d${CTL}lbStates=416";;
+	british\ columbia) states="$states -d${CTL}lbStates=64";;
+	brussels) states="$states -d${CTL}lbStates=93";;
+	budapest) states="$states -d${CTL}lbStates=438";;
+	burgenland) states="$states -d${CTL}lbStates=258";;
+	busan) states="$states -d${CTL}lbStates=297";;
+	buskerud) states="$states -d${CTL}lbStates=244";;
+	calabria) states="$states -d${CTL}lbStates=192";;
+	ca|california) states="$states -d${CTL}lbStates=5";;
+	campania) states="$states -d${CTL}lbStates=193";;
+	campeche) states="$states -d${CTL}lbStates=457";;
+	cantabria) states="$states -d${CTL}lbStates=130";;
+	castelo\ branco) states="$states -d${CTL}lbStates=99";;
+	castilla\ y\ leon) states="$states -d${CTL}lbStates=115";;
+	castilla-la\ mancha) states="$states -d${CTL}lbStates=117";;
+	cataluna) states="$states -d${CTL}lbStates=121";;
+	ceara) states="$states -d${CTL}lbStates=167";;
+	centre-val-de-loire) states="$states -d${CTL}lbStates=417";;
+	ceuta) states="$states -d${CTL}lbStates=133";;
+	chatham\ islands) states="$states -d${CTL}lbStates=486";;
+	chiapas) states="$states -d${CTL}lbStates=458";;
+	chiba) states="$states -d${CTL}lbStates=314";;
+	chihuahua) states="$states -d${CTL}lbStates=459";;
+	chungcheong\ buk\ do) states="$states -d${CTL}lbStates=305";;
+	chungcheong\ nam\ do) states="$states -d${CTL}lbStates=306";;
+	coahuila) states="$states -d${CTL}lbStates=460";;
+	coimbra) states="$states -d${CTL}lbStates=100";;
+	colima) states="$states -d${CTL}lbStates=461";;
+	co|colorado) states="$states -d${CTL}lbStates=6";;
+	comunidad\ de\ madrid) states="$states -d${CTL}lbStates=127";;
+	comunidad\ foral\ de\ navarra) states="$states -d${CTL}lbStates=126";;
+	comunidad\ valenciana) states="$states -d${CTL}lbStates=123";;
+	connacht) states="$states -d${CTL}lbStates=227";;
+	ct|connecticut) states="$states -d${CTL}lbStates=7";;
+	corse) states="$states -d${CTL}lbStates=419";;
+	csongrad) states="$states -d${CTL}lbStates=439";;
+	daegu) states="$states -d${CTL}lbStates=298";;
+	daejeon) states="$states -d${CTL}lbStates=301";;
+	dalarna) states="$states -d${CTL}lbStates=360";;
+	de|delaware) states="$states -d${CTL}lbStates=9";;
+	dc|district\ of\ columbia) states="$states -d${CTL}lbStates=8";;
+	distrito\ federal) states="$states -d${CTL}lbStates=168";;
+	distrito\ federal) states="$states -d${CTL}lbStates=462";;
+	dolnoslaskie) states="$states -d${CTL}lbStates=396";;
+	drenthe) states="$states -d${CTL}lbStates=385";;
+	dublin) states="$states -d${CTL}lbStates=226";;
+	durango) states="$states -d${CTL}lbStates=463";;
+	east\ midlands) states="$states -d${CTL}lbStates=215";;
+	eastern\ cape) states="$states -d${CTL}lbStates=153";;
+	eastern\ england) states="$states -d${CTL}lbStates=219";;
+	ehime) states="$states -d${CTL}lbStates=315";;
+	emilia-romagna) states="$states -d${CTL}lbStates=194";;
+	esporito\ santo) states="$states -d${CTL}lbStates=169";;
+	evora) states="$states -d${CTL}lbStates=101";;
+	extremadura) states="$states -d${CTL}lbStates=120";;
+	faro) states="$states -d${CTL}lbStates=102";;
+	fejer) states="$states -d${CTL}lbStates=440";;
+	finnmark) states="$states -d${CTL}lbStates=257";;
+	flevoland) states="$states -d${CTL}lbStates=395";;
+	fl|florida) states="$states -d${CTL}lbStates=10";;
+	free\ state) states="$states -d${CTL}lbStates=160";;
+	fribourg) states="$states -d${CTL}lbStates=503";;
+	friesland) states="$states -d${CTL}lbStates=394";;
+	friuli-venezia\ giulia) states="$states -d${CTL}lbStates=195";;
+	fukui) states="$states -d${CTL}lbStates=316";;
+	fukuoka) states="$states -d${CTL}lbStates=317";;
+	fukushima) states="$states -d${CTL}lbStates=318";;
+	galicia) states="$states -d${CTL}lbStates=122";;
+	gangwondo) states="$states -d${CTL}lbStates=304";;
+	gauteng) states="$states -d${CTL}lbStates=159";;
+	gavleborg) states="$states -d${CTL}lbStates=362";;
+	gelderland) states="$states -d${CTL}lbStates=387";;
+	geneve) states="$states -d${CTL}lbStates=504";;
+	ga|georgia) states="$states -d${CTL}lbStates=11";;
+	gifu) states="$states -d${CTL}lbStates=319";;
+	glarus) states="$states -d${CTL}lbStates=505";;
+	goias) states="$states -d${CTL}lbStates=170";;
+	gotland) states="$states -d${CTL}lbStates=361";;
+	grand-est) states="$states -d${CTL}lbStates=489";;
+	graubunden) states="$states -d${CTL}lbStates=506";;
+	groningen) states="$states -d${CTL}lbStates=384";;
+	guanajuato) states="$states -d${CTL}lbStates=464";;
+	guarda) states="$states -d${CTL}lbStates=103";;
+	guerrero) states="$states -d${CTL}lbStates=465";;
+	gunma) states="$states -d${CTL}lbStates=320";;
+	gwangju) states="$states -d${CTL}lbStates=300";;
+	gyeonggido) states="$states -d${CTL}lbStates=303";;
+	gyeongsang\ buk\ do) states="$states -d${CTL}lbStates=309";;
+	gyeongsang\ nam\ do) states="$states -d${CTL}lbStates=310";;
+	gyor-moson-sopron) states="$states -d${CTL}lbStates=441";;
+	hainaut) states="$states -d${CTL}lbStates=88";;
+	hajdu-bihar) states="$states -d${CTL}lbStates=442";;
+	halland) states="$states -d${CTL}lbStates=363";;
+	hamburg) states="$states -d${CTL}lbStates=140";;
+	hauts-de-france) states="$states -d${CTL}lbStates=492";;
+	ha|hawaii) states="$states -d${CTL}lbStates=12";;
+	hedmark) states="$states -d${CTL}lbStates=242";;
+	hessen) states="$states -d${CTL}lbStates=150";;
+	heves) states="$states -d${CTL}lbStates=443";;
+	hidalgo) states="$states -d${CTL}lbStates=466";;
+	hiroshima) states="$states -d${CTL}lbStates=321";;
+	hlavno\ mesto\ praha) states="$states -d${CTL}lbStates=286";;
+	hokkaido) states="$states -d${CTL}lbStates=322";;
+	hordaland) states="$states -d${CTL}lbStates=250";;
+	hyogo) states="$states -d${CTL}lbStates=323";;
+	ibaraki) states="$states -d${CTL}lbStates=324";;
+	id|idaho) states="$states -d${CTL}lbStates=13";;
+	ile-de-france) states="$states -d${CTL}lbStates=422";;
+	il|illinois) states="$states -d${CTL}lbStates=14";;
+	incheon) states="$states -d${CTL}lbStates=299";;
+	in|indiana) states="$states -d${CTL}lbStates=15";;
+	ia|iowa) states="$states -d${CTL}lbStates=16";;
+	ishikawa) states="$states -d${CTL}lbStates=325";;
+	islas\ baleares) states="$states -d${CTL}lbStates=132";;
+	islas\ canarias) states="$states -d${CTL}lbStates=128";;
+	iwate) states="$states -d${CTL}lbStates=326";;
+	jalisco) states="$states -d${CTL}lbStates=467";;
+	jamtland) states="$states -d${CTL}lbStates=364";;
+	jasz-nagykun-szolnok) states="$states -d${CTL}lbStates=444";;
+	jejudo) states="$states -d${CTL}lbStates=311";;
+	jeolla\ buk\ do) states="$states -d${CTL}lbStates=307";;
+	jeolla\ nam\ do) states="$states -d${CTL}lbStates=308";;
+	jihocesky\ kraj) states="$states -d${CTL}lbStates=274";;
+	jihomoravsky\ kraj) states="$states -d${CTL}lbStates=273";;
+	jonkoping) states="$states -d${CTL}lbStates=365";;
+	jura) states="$states -d${CTL}lbStates=507";;
+	kagawa) states="$states -d${CTL}lbStates=327";;
+	kagoshima) states="$states -d${CTL}lbStates=328";;
+	kalmar) states="$states -d${CTL}lbStates=366";;
+	kanagawa) states="$states -d${CTL}lbStates=329";;
+	ks|kansas) states="$states -d${CTL}lbStates=17";;
+	karlovarsky\ kraj) states="$states -d${CTL}lbStates=276";;
+	karnten) states="$states -d${CTL}lbStates=259";;
+	ky|kentucky) states="$states -d${CTL}lbStates=18";;
+	kochi) states="$states -d${CTL}lbStates=330";;
+	komarom-esztergom) states="$states -d${CTL}lbStates=445";;
+	kosicky\ kraj) states="$states -d${CTL}lbStates=289";;
+	kraj\ vysocina) states="$states -d${CTL}lbStates=284";;
+	kralovehradecky\ kraj) states="$states -d${CTL}lbStates=275";;
+	kronoberg) states="$states -d${CTL}lbStates=367";;
+	kujawsko-pomorskie) states="$states -d${CTL}lbStates=397";;
+	kumamoto) states="$states -d${CTL}lbStates=331";;
+	kwazulu\ natal) states="$states -d${CTL}lbStates=157";;
+	kyoto) states="$states -d${CTL}lbStates=332";;
+	la\ rioja) states="$states -d${CTL}lbStates=131";;
+	lazio) states="$states -d${CTL}lbStates=196";;
+	leinster) states="$states -d${CTL}lbStates=228";;
+	leiria) states="$states -d${CTL}lbStates=104";;
+	liberecky\ kraj) states="$states -d${CTL}lbStates=277";;
+	liege) states="$states -d${CTL}lbStates=80";;
+	liguria) states="$states -d${CTL}lbStates=197";;
+	limburg) states="$states -d${CTL}lbStates=89";;
+	limburg) states="$states -d${CTL}lbStates=393";;
+	limpopo) states="$states -d${CTL}lbStates=158";;
+	lisboa) states="$states -d${CTL}lbStates=105";;
+	lodzkie) states="$states -d${CTL}lbStates=400";;
+	lombardia) states="$states -d${CTL}lbStates=198";;
+	london) states="$states -d${CTL}lbStates=220";;
+	la|louisiana) states="$states -d${CTL}lbStates=19";;
+	lubelskie) states="$states -d${CTL}lbStates=398";;
+	lubuskie) states="$states -d${CTL}lbStates=399";;
+	luxembourg) states="$states -d${CTL}lbStates=90";;
+	luzern) states="$states -d${CTL}lbStates=508";;
+	me|maine) states="$states -d${CTL}lbStates=20";;
+	malopolskie) states="$states -d${CTL}lbStates=401";;
+	manitoba) states="$states -d${CTL}lbStates=65";;
+	maranhao) states="$states -d${CTL}lbStates=171";;
+	marche) states="$states -d${CTL}lbStates=199";;
+	md|maryland) states="$states -d${CTL}lbStates=21";;
+	md|massachusetts) states="$states -d${CTL}lbStates=22";;
+	mato\ grosso) states="$states -d${CTL}lbStates=172";;
+	mato\ grosso\ do\ sul) states="$states -d${CTL}lbStates=173";;
+	mazowieckie) states="$states -d${CTL}lbStates=402";;
+	mecklenburg-vorpommern) states="$states -d${CTL}lbStates=141";;
+	melilla) states="$states -d${CTL}lbStates=134";;
+	mexico) states="$states -d${CTL}lbStates=468";;
+	mi|michigan) states="$states -d${CTL}lbStates=23";;
+	michoacan) states="$states -d${CTL}lbStates=469";;
+	mie) states="$states -d${CTL}lbStates=333";;
+	minas\ gerais) states="$states -d${CTL}lbStates=174";;
+	mn|minnesota) states="$states -d${CTL}lbStates=24";;
+	ms|mississippi) states="$states -d${CTL}lbStates=25";;
+	mo|missouri) states="$states -d${CTL}lbStates=26";;
+	miyagi) states="$states -d${CTL}lbStates=334";;
+	miyazaki) states="$states -d${CTL}lbStates=335";;
+	molise) states="$states -d${CTL}lbStates=200";;
+	mt|montana) states="$states -d${CTL}lbStates=27";;
+	moravskoslezsky\ kraj) states="$states -d${CTL}lbStates=279";;
+	more\ og\ romsdal) states="$states -d${CTL}lbStates=252";;
+	morelos) states="$states -d${CTL}lbStates=470";;
+	mpumalanga) states="$states -d${CTL}lbStates=155";;
+	munster) states="$states -d${CTL}lbStates=225";;
+	nagano) states="$states -d${CTL}lbStates=336";;
+	nagasaki) states="$states -d${CTL}lbStates=337";;
+	namur) states="$states -d${CTL}lbStates=81";;
+	nara) states="$states -d${CTL}lbStates=338";;
+	nayarit) states="$states -d${CTL}lbStates=471";;
+	ne|nebraska) states="$states -d${CTL}lbStates=28";;
+	neuchatel) states="$states -d${CTL}lbStates=509";;
+	nv|nevada) states="$states -d${CTL}lbStates=29";;
+	new\ brunswick) states="$states -d${CTL}lbStates=66";;
+	nh|new\ hampshire) states="$states -d${CTL}lbStates=30";;
+	nj|new\ jersey) states="$states -d${CTL}lbStates=31";;
+	nm|new\ mexico) states="$states -d${CTL}lbStates=32";;
+	new\ south\ wales) states="$states -d${CTL}lbStates=52";;
+	ny|new\ york) states="$states -d${CTL}lbStates=33";;
+	newfoundland\ and\ labrador) states="$states -d${CTL}lbStates=67";;
+	nidwalden) states="$states -d${CTL}lbStates=510";;
+	niederosterreich) states="$states -d${CTL}lbStates=260";;
+	niedersachsen) states="$states -d${CTL}lbStates=142";;
+	niigata) states="$states -d${CTL}lbStates=339";;
+	nitriansky\ kraj) states="$states -d${CTL}lbStates=290";;
+	nograd) states="$states -d${CTL}lbStates=446";;
+	noord-brabant) states="$states -d${CTL}lbStates=392";;
+	noord-holland) states="$states -d${CTL}lbStates=389";;
+	nordland) states="$states -d${CTL}lbStates=255";;
+	nordrhein-westfalen) states="$states -d${CTL}lbStates=143";;
+	normandie) states="$states -d${CTL}lbStates=487";;
+	norrbotten) states="$states -d${CTL}lbStates=368";;
+	nc|north\ carolina) states="$states -d${CTL}lbStates=34";;
+	nd|north\ dakota) states="$states -d${CTL}lbStates=35";;
+	north\ east\ england) states="$states -d${CTL}lbStates=212";;
+	north\ island) states="$states -d${CTL}lbStates=82";;
+	north\ wales) states="$states -d${CTL}lbStates=217";;
+	north\ west) states="$states -d${CTL}lbStates=156";;
+	north\ west\ england) states="$states -d${CTL}lbStates=213";;
+	northern\ cape) states="$states -d${CTL}lbStates=154";;
+	northern\ scotland) states="$states -d${CTL}lbStates=210";;
+	northern\ territory) states="$states -d${CTL}lbStates=58";;
+	northwest\ territories) states="$states -d${CTL}lbStates=72";;
+	nouvelle-aquitaine) states="$states -d${CTL}lbStates=491";;
+	nova\ scotia) states="$states -d${CTL}lbStates=68";;
+	nuevo\ leon) states="$states -d${CTL}lbStates=472";;
+	nunavut) states="$states -d${CTL}lbStates=73";;
+	oaxaca) states="$states -d${CTL}lbStates=473";;
+	oberosterreich) states="$states -d${CTL}lbStates=261";;
+	obwalden) states="$states -d${CTL}lbStates=511";;
+	occitanie) states="$states -d${CTL}lbStates=490";;
+	oh|ohio) states="$states -d${CTL}lbStates=36";;
+	oita) states="$states -d${CTL}lbStates=340";;
+	okayama) states="$states -d${CTL}lbStates=341";;
+	okinawa) states="$states -d${CTL}lbStates=342";;
+	ok|oklahoma) states="$states -d${CTL}lbStates=37";;
+	olomoucky\ kraj) states="$states -d${CTL}lbStates=278";;
+	ontario) states="$states -d${CTL}lbStates=69";;
+	oost-vlaanderen) states="$states -d${CTL}lbStates=76";;
+	opolskie) states="$states -d${CTL}lbStates=403";;
+	oppland) states="$states -d${CTL}lbStates=243";;
+	orebro) states="$states -d${CTL}lbStates=378";;
+	or|oregon) states="$states -d${CTL}lbStates=38";;
+	osaka) states="$states -d${CTL}lbStates=343";;
+	oslo) states="$states -d${CTL}lbStates=241";;
+	ostergotland) states="$states -d${CTL}lbStates=379";;
+	ostfold) states="$states -d${CTL}lbStates=239";;
+	overijssel) states="$states -d${CTL}lbStates=386";;
+	paos\ vasco) states="$states -d${CTL}lbStates=129";;
+	para) states="$states -d${CTL}lbStates=175";;
+	paraoba) states="$states -d${CTL}lbStates=176";;
+	parana) states="$states -d${CTL}lbStates=177";;
+	pardubicky\ kraj) states="$states -d${CTL}lbStates=280";;
+	pays\ de\ la\ loire) states="$states -d${CTL}lbStates=428";;
+	pa|pennsylvania) states="$states -d${CTL}lbStates=39";;
+	pernambuco) states="$states -d${CTL}lbStates=178";;
+	pest) states="$states -d${CTL}lbStates=447";;
+	piauo) states="$states -d${CTL}lbStates=179";;
+	piemonte) states="$states -d${CTL}lbStates=201";;
+	plzensky\ kraj) states="$states -d${CTL}lbStates=281";;
+	podkarpackie) states="$states -d${CTL}lbStates=404";;
+	podlaskie) states="$states -d${CTL}lbStates=405";;
+	pomorskie) states="$states -d${CTL}lbStates=406";;
+	portalegre) states="$states -d${CTL}lbStates=106";;
+	porto) states="$states -d${CTL}lbStates=107";;
+	presovsky\ kraj) states="$states -d${CTL}lbStates=291";;
+	prince\ edward\ island) states="$states -d${CTL}lbStates=70";;
+	principado\ de\ asturias) states="$states -d${CTL}lbStates=125";;
+	provence-alpes-cote\ dazur) states="$states -d${CTL}lbStates=431";;
+	puebla) states="$states -d${CTL}lbStates=474";;
+	puglia) states="$states -d${CTL}lbStates=202";;
+	quebec) states="$states -d${CTL}lbStates=62";;
+	queensland) states="$states -d${CTL}lbStates=54";;
+	queretaro) states="$states -d${CTL}lbStates=475";;
+	quintana\ roo) states="$states -d${CTL}lbStates=476";;
+	region\ de\ murcia) states="$states -d${CTL}lbStates=124";;
+	rheinland-pfalz) states="$states -d${CTL}lbStates=144";;
+	ri|rhode\ island) states="$states -d${CTL}lbStates=40";;
+	rio\ de\ janeiro) states="$states -d${CTL}lbStates=180";;
+	rio\ grande\ do\ norte) states="$states -d${CTL}lbStates=181";;
+	rio\ grande\ do\ sul) states="$states -d${CTL}lbStates=182";;
+	rogaland) states="$states -d${CTL}lbStates=249";;
+	rondonia) states="$states -d${CTL}lbStates=183";;
+	roraima) states="$states -d${CTL}lbStates=184";;
+	saarland) states="$states -d${CTL}lbStates=145";;
+	saba) states="$states -d${CTL}lbStates=525";;
+	sachsen) states="$states -d${CTL}lbStates=146";;
+	sachsen-anhalt) states="$states -d${CTL}lbStates=147";;
+	saga) states="$states -d${CTL}lbStates=344";;
+	saitama) states="$states -d${CTL}lbStates=345";;
+	salzburg) states="$states -d${CTL}lbStates=262";;
+	san\ luis\ potoso) states="$states -d${CTL}lbStates=477";;
+	santa\ catarina) states="$states -d${CTL}lbStates=185";;
+	santarem) states="$states -d${CTL}lbStates=108";;
+	sao\ paulo) states="$states -d${CTL}lbStates=186";;
+	sardegna) states="$states -d${CTL}lbStates=203";;
+	saskatchewan) states="$states -d${CTL}lbStates=71";;
+	schaffhausen) states="$states -d${CTL}lbStates=512";;
+	schleswig-holstein) states="$states -d${CTL}lbStates=148";;
+	schwyz) states="$states -d${CTL}lbStates=513";;
+	sejong) states="$states -d${CTL}lbStates=495";;
+	seoul) states="$states -d${CTL}lbStates=296";;
+	sergipe) states="$states -d${CTL}lbStates=187";;
+	setubal) states="$states -d${CTL}lbStates=109";;
+	shiga) states="$states -d${CTL}lbStates=346";;
+	shimane) states="$states -d${CTL}lbStates=347";;
+	shizuoka) states="$states -d${CTL}lbStates=348";;
+	sicilia) states="$states -d${CTL}lbStates=204";;
+	sinaloa) states="$states -d${CTL}lbStates=478";;
+	sint\ eustatius) states="$states -d${CTL}lbStates=524";;
+	skane) states="$states -d${CTL}lbStates=369";;
+	slaskie) states="$states -d${CTL}lbStates=407";;
+	sodermanland) states="$states -d${CTL}lbStates=371";;
+	sogn\ og\ fjordane) states="$states -d${CTL}lbStates=251";;
+	solothurn) states="$states -d${CTL}lbStates=514";;
+	somogy) states="$states -d${CTL}lbStates=448";;
+	sonora) states="$states -d${CTL}lbStates=479";;
+	south\ australia) states="$states -d${CTL}lbStates=55";;
+	sc|south\ carolina) states="$states -d${CTL}lbStates=41";;
+	sd|south\ dakota) states="$states -d${CTL}lbStates=42";;
+	south\ east\ england) states="$states -d${CTL}lbStates=223";;
+	south\ island) states="$states -d${CTL}lbStates=86";;
+	south\ wales) states="$states -d${CTL}lbStates=218";;
+	south\ west\ england) states="$states -d${CTL}lbStates=222";;
+	southern\ england) states="$states -d${CTL}lbStates=221";;
+	southern\ scotland) states="$states -d${CTL}lbStates=211";;
+	st.\ gallen) states="$states -d${CTL}lbStates=515";;
+	steiermark) states="$states -d${CTL}lbStates=263";;
+	stockholm) states="$states -d${CTL}lbStates=370";;
+	stredocesky\ kraj) states="$states -d${CTL}lbStates=282";;
+	swietokrzyskie) states="$states -d${CTL}lbStates=408";;
+	szabolcs-szatmar-bereg) states="$states -d${CTL}lbStates=449";;
+	tabasco) states="$states -d${CTL}lbStates=480";;
+	tamaulipas) states="$states -d${CTL}lbStates=481";;
+	tasmania) states="$states -d${CTL}lbStates=57";;
+	telemark) states="$states -d${CTL}lbStates=245";;
+	tn|tennessee) states="$states -d${CTL}lbStates=43";;
+	tx|texas) states="$states -d${CTL}lbStates=44";;
+	thurgau) states="$states -d${CTL}lbStates=516";;
+	thuringen) states="$states -d${CTL}lbStates=149";;
+	ticino) states="$states -d${CTL}lbStates=517";;
+	tirol) states="$states -d${CTL}lbStates=264";;
+	tlaxcala) states="$states -d${CTL}lbStates=482";;
+	tocantins) states="$states -d${CTL}lbStates=188";;
+	tochigi) states="$states -d${CTL}lbStates=349";;
+	tokushima) states="$states -d${CTL}lbStates=350";;
+	tokyo) states="$states -d${CTL}lbStates=351";;
+	tolna) states="$states -d${CTL}lbStates=450";;
+	toscana) states="$states -d${CTL}lbStates=205";;
+	tottori) states="$states -d${CTL}lbStates=352";;
+	toyama) states="$states -d${CTL}lbStates=353";;
+	trenciansky\ kraj) states="$states -d${CTL}lbStates=292";;
+	trentino-alto\ adige) states="$states -d${CTL}lbStates=206";;
+	trnavsky\ kraj) states="$states -d${CTL}lbStates=293";;
+	troms) states="$states -d${CTL}lbStates=256";;
+	trondelag) states="$states -d${CTL}lbStates=494";;
+	ulsan) states="$states -d${CTL}lbStates=302";;
+	ulster) states="$states -d${CTL}lbStates=224";;
+	umbria) states="$states -d${CTL}lbStates=207";;
+	uppsala) states="$states -d${CTL}lbStates=372";;
+	uri) states="$states -d${CTL}lbStates=518";;
+	ustecky\ kraj) states="$states -d${CTL}lbStates=283";;
+	ut|utah) states="$states -d${CTL}lbStates=45";;
+	utrecht) states="$states -d${CTL}lbStates=388";;
+	valais) states="$states -d${CTL}lbStates=519";;
+	valle\ daosta) states="$states -d${CTL}lbStates=208";;
+	varmland) states="$states -d${CTL}lbStates=373";;
+	vas) states="$states -d${CTL}lbStates=451";;
+	vasterbotten) states="$states -d${CTL}lbStates=374";;
+	vasternorrland) states="$states -d${CTL}lbStates=375";;
+	vastmanland) states="$states -d${CTL}lbStates=376";;
+	vastra\ gotaland) states="$states -d${CTL}lbStates=377";;
+	vaud) states="$states -d${CTL}lbStates=520";;
+	veneto) states="$states -d${CTL}lbStates=209";;
+	veracruz) states="$states -d${CTL}lbStates=483";;
+	vt|vermont) states="$states -d${CTL}lbStates=46";;
+	vest-agder) states="$states -d${CTL}lbStates=248";;
+	vestfold) states="$states -d${CTL}lbStates=246";;
+	veszprem) states="$states -d${CTL}lbStates=452";;
+	viana\ do\ castelo) states="$states -d${CTL}lbStates=110";;
+	victoria) states="$states -d${CTL}lbStates=53";;
+	vila\ real) states="$states -d${CTL}lbStates=112";;
+	va|virginia) states="$states -d${CTL}lbStates=47";;
+	viseu) states="$states -d${CTL}lbStates=111";;
+	vlaams-brabant) states="$states -d${CTL}lbStates=78";;
+	vorarlberg) states="$states -d${CTL}lbStates=265";;
+	wakayama) states="$states -d${CTL}lbStates=354";;
+	warminsko-mazurskie) states="$states -d${CTL}lbStates=409";;
+	wa|washington) states="$states -d${CTL}lbStates=48";;
+	west\ midlands) states="$states -d${CTL}lbStates=216";;
+	wv|west\ virginia) states="$states -d${CTL}lbStates=49";;
+	western\ australia) states="$states -d${CTL}lbStates=56";;
+	western\ cape) states="$states -d${CTL}lbStates=152";;
+	west-vlaanderen) states="$states -d${CTL}lbStates=92";;
+	wielkopolskie) states="$states -d${CTL}lbStates=410";;
+	wien) states="$states -d${CTL}lbStates=295";;
+	wi|wisconsin) states="$states -d${CTL}lbStates=50";;
+	wy|wyoming) states="$states -d${CTL}lbStates=51";;
+	yamagata) states="$states -d${CTL}lbStates=355";;
+	yamaguchi) states="$states -d${CTL}lbStates=356";;
+	yamanashi) states="$states -d${CTL}lbStates=357";;
+	yorkshire) states="$states -d${CTL}lbStates=214";;
+	yucatan) states="$states -d${CTL}lbStates=484";;
+	yukon\ territory) states="$states -d${CTL}lbStates=74";;
+	zacatecas) states="$states -d${CTL}lbStates=485";;
+	zachodniopomorskie) states="$states -d${CTL}lbStates=411";;
+	zala) states="$states -d${CTL}lbStates=453";;
+	zeeland) states="$states -d${CTL}lbStates=391";;
+	zilinsky\ kraj) states="$states -d${CTL}lbStates=294";;
+	zlonsky\ kraj) states="$states -d${CTL}lbStates=285";;
+	zug) states="$states -d${CTL}lbStates=521";;
+	zuid-holland) states="$states -d${CTL}lbStates=390";;
+	zurich) states="$states -d${CTL}lbStates=522";;
+
+	.af|.afg|afghanistan) countries="$countries -d${CTL}lbCountries=12";;
+	.ax|.ala|aland\ islands) countries="$countries -d${CTL}lbCountries=272";;
+	.al|.alb|albania) countries="$countries -d${CTL}lbCountries=244";;
+	.dz|.dza|algeria) countries="$countries -d${CTL}lbCountries=14";;
+	.as|.asm|american\ samoa) countries="$countries -d${CTL}lbCountries=245";;
+	.ad|.and|andorra) countries="$countries -d${CTL}lbCountries=16";;
+	.ao|.ago|angola) countries="$countries -d${CTL}lbCountries=17";;
+	.ai|.aia|anguilla) countries="$countries -d${CTL}lbCountries=246";;
+	.aq|.ata|antarctica) countries="$countries -d${CTL}lbCountries=18";;
+	.ag|.atg|antigua\ and\ barbuda) countries="$countries -d${CTL}lbCountries=13";;
+	.ar|.arg|argentina) countries="$countries -d${CTL}lbCountries=19";;
+	.am|.arm|armenia) countries="$countries -d${CTL}lbCountries=15";;
+	.aw|.abw|aruba) countries="$countries -d${CTL}lbCountries=20";;
+	.au|.aus|australia) countries="$countries -d${CTL}lbCountries=3";;
+	.at|.aut|austria) countries="$countries -d${CTL}lbCountries=227";;
+	.az|.aze|azerbaijan) countries="$countries -d${CTL}lbCountries=21";;
+	.bs|.bhs|bahamas) countries="$countries -d${CTL}lbCountries=23";;
+	.bh|.bhr|bahrain) countries="$countries -d${CTL}lbCountries=29";;
+	.bd|.bgd|bangladesh) countries="$countries -d${CTL}lbCountries=24";;
+	.bb|.brb|barbados) countries="$countries -d${CTL}lbCountries=25";;
+	.by|.blr|belarus) countries="$countries -d${CTL}lbCountries=40";;
+	.be|.bel|belgium) countries="$countries -d${CTL}lbCountries=4";;
+	.bz|.blz|belize) countries="$countries -d${CTL}lbCountries=31";;
+	.bj|.ben|benin) countries="$countries -d${CTL}lbCountries=26";;
+	.bm|.bmu|bermuda) countries="$countries -d${CTL}lbCountries=27";;
+	.bt|.btu|bhutan) countries="$countries -d${CTL}lbCountries=30";;
+	.bo|.bol|bolivia) countries="$countries -d${CTL}lbCountries=32";;
+	.bq|.bes|bonaire,\ sint\ eustatius\ and\ saba) countries="$countries -d${CTL}lbCountries=279";;
+	.ba|.bih|bosnia\ and\ herzegovina) countries="$countries -d${CTL}lbCountries=234";;
+	.bw|.bwa|botswana) countries="$countries -d${CTL}lbCountries=33";;
+	.bv|.bvt|bouvet\ island) countries="$countries -d${CTL}lbCountries=247";;
+	.br|.bra|brazil) countries="$countries -d${CTL}lbCountries=34";;
+	.io|.iot|british\ indian\ ocean\ territory) countries="$countries -d${CTL}lbCountries=248";;
+	.vg|.vgb|british\ virgin\ islands) countries="$countries -d${CTL}lbCountries=39";;
+	.bn|.brn|brunei) countries="$countries -d${CTL}lbCountries=36";;
+	.bg|.bgr|bulgaria) countries="$countries -d${CTL}lbCountries=37";;
+	.bf|.bfa|burkina\ faso) countries="$countries -d${CTL}lbCountries=216";;
+	.bi|.bdi|burundi) countries="$countries -d${CTL}lbCountries=35";;
+	.cv|.cpv|cabo\ verde) countries="$countries -d${CTL}lbCountries=239";;
+	.kh|.khm|cambodia) countries="$countries -d${CTL}lbCountries=42";;
+	.cm|.cmr|cameroon) countries="$countries -d${CTL}lbCountries=43";;
+	.ca|.can|canada) countries="$countries -d${CTL}lbCountries=5";;
+	.ky|.cym|cayman\ islands) countries="$countries -d${CTL}lbCountries=44";;
+	.cf|.caf|central\ african\ republic) countries="$countries -d${CTL}lbCountries=46";;
+	.td|.tcd|chad) countries="$countries -d${CTL}lbCountries=249";;
+	.cl|.chl|chile) countries="$countries -d${CTL}lbCountries=6";;
+	.cn|.chn|china) countries="$countries -d${CTL}lbCountries=47";;
+	.cx|.cxr|christmas\ island) countries="$countries -d${CTL}lbCountries=250";;
+	.cc|.cck|cocos\ islands) countries="$countries -d${CTL}lbCountries=251";;
+	.co|.col|colombia) countries="$countries -d${CTL}lbCountries=49";;
+	.km|.com|comoros) countries="$countries -d${CTL}lbCountries=50";;
+	.cg|.cog|congo) countries="$countries -d${CTL}lbCountries=51";;
+	.ck|.cok|cook\ islands) countries="$countries -d${CTL}lbCountries=48";;
+	.cr|.cri|costa\ rica) countries="$countries -d${CTL}lbCountries=52";;
+	.ci|.civ|cote\ d\ ivoire) countries="$countries -d${CTL}lbCountries=100";;
+	.hr|.hrv|croatia) countries="$countries -d${CTL}lbCountries=53";;
+	.cu|.cub|cuba) countries="$countries -d${CTL}lbCountries=238";;
+	.cw|.cuw|curacao) countries="$countries -d${CTL}lbCountries=54";;
+	.cy|.cyp|cyprus) countries="$countries -d${CTL}lbCountries=55";;
+	.cz|.cze|czechia) countries="$countries -d${CTL}lbCountries=56";;
+	.cd|.cod|democratic\ republic\ of\ the\ congo) countries="$countries -d${CTL}lbCountries=257";;
+	.dk|.dnk|denmark) countries="$countries -d${CTL}lbCountries=57";;
+	.dj|.dji|djibouti) countries="$countries -d${CTL}lbCountries=58";;
+	.dm|.dma|dominica) countries="$countries -d${CTL}lbCountries=59";;
+	.do|.dom|dominican\ republic) countries="$countries -d${CTL}lbCountries=60";;
+	.ec|.ecu|ecuador) countries="$countries -d${CTL}lbCountries=61";;
+	.eg|.egy|egypt) countries="$countries -d${CTL}lbCountries=63";;
+	.sv|.slv|el\ salvador) countries="$countries -d${CTL}lbCountries=64";;
+	.gq|.gnq|equatorial\ guinea) countries="$countries -d${CTL}lbCountries=62";;
+	.er|.eri|eritrea) countries="$countries -d${CTL}lbCountries=65";;
+	.ee|.est|estonia) countries="$countries -d${CTL}lbCountries=66";;
+	.et|.eth|ethiopia) countries="$countries -d${CTL}lbCountries=67";;
+	.fk|.flk|falkland\ islands) countries="$countries -d${CTL}lbCountries=69";;
+	.fo|.fro|faroe\ islands) countries="$countries -d${CTL}lbCountries=68";;
+	.fj|.fji|fiji) countries="$countries -d${CTL}lbCountries=71";;
+	.fi|.fin|finland) countries="$countries -d${CTL}lbCountries=72";;
+	.fr|.fra|france) countries="$countries -d${CTL}lbCountries=73";;
+	.gf|.guf|french\ guiana) countries="$countries -d${CTL}lbCountries=70";;
+	.pf|.pyf|french\ polynesia) countries="$countries -d${CTL}lbCountries=74";;
+	.tf|.atf|french\ southern\ and\ antarctic\ territories) countries="$countries -d${CTL}lbCountries=253";;
+	.ga|.gab|gabon) countries="$countries -d${CTL}lbCountries=75";;
+	.gm|.gmb|gambia) countries="$countries -d${CTL}lbCountries=76";;
+	.ge|.geo|georgia) countries="$countries -d${CTL}lbCountries=78";;
+	.de|.deu|germany) countries="$countries -d${CTL}lbCountries=79";;
+	.gh|.gha|ghana) countries="$countries -d${CTL}lbCountries=254";;
+	.gi|.gib|gibraltar) countries="$countries -d${CTL}lbCountries=80";;
+	.gr|.grc|greece) countries="$countries -d${CTL}lbCountries=82";;
+	.gl|.grl|greenland) countries="$countries -d${CTL}lbCountries=83";;
+	.gd|.grd|grenada) countries="$countries -d${CTL}lbCountries=81";;
+	.gp|.glp|guadeloupe) countries="$countries -d${CTL}lbCountries=77";;
+	.gu|.gum|guam) countries="$countries -d${CTL}lbCountries=229";;
+	.gt|.gtm|guatemala) countries="$countries -d${CTL}lbCountries=84";;
+	.gg|.ggy|guernsey) countries="$countries -d${CTL}lbCountries=86";;
+	.gn|.gin|guinea) countries="$countries -d${CTL}lbCountries=255";;
+	.gw|.gnb|guinea-bissau) countries="$countries -d${CTL}lbCountries=85";;
+	.gy|.guy|guyana) countries="$countries -d${CTL}lbCountries=87";;
+	.ht|.hti|haiti) countries="$countries -d${CTL}lbCountries=89";;
+	.hm|.hmd|heard\ island\ and\ mcdonald\ islands) countries="$countries -d${CTL}lbCountries=256";;
+	.hn|.hnd|honduras) countries="$countries -d${CTL}lbCountries=90";;
+	.hk|.hkg|hong\ kong) countries="$countries -d${CTL}lbCountries=91";;
+	.hu|.hun|hungary) countries="$countries -d${CTL}lbCountries=92";;
+	.is|.isl|iceland) countries="$countries -d${CTL}lbCountries=93";;
+	.in|.ind|india) countries="$countries -d${CTL}lbCountries=94";;
+	.id|.idn|indonesia) countries="$countries -d${CTL}lbCountries=95";;
+	.ir|.irn|iran) countries="$countries -d${CTL}lbCountries=96";;
+	.iq|.irq|iraq) countries="$countries -d${CTL}lbCountries=97";;
+	.ie|.irl|ireland) countries="$countries -d${CTL}lbCountries=7";;
+	.im|.imn|isle\ of\ man) countries="$countries -d${CTL}lbCountries=243";;
+	.il|.isr|israel) countries="$countries -d${CTL}lbCountries=98";;
+	.it|.ita|italy) countries="$countries -d${CTL}lbCountries=99";;
+	.jm|.jam|jamaica) countries="$countries -d${CTL}lbCountries=101";;
+	.jp|.jpn|japan) countries="$countries -d${CTL}lbCountries=104";;
+	.je|.jey|jersey) countries="$countries -d${CTL}lbCountries=102";;
+	.jo|.jor|jordan) countries="$countries -d${CTL}lbCountries=103";;
+	.kz|.kaz|kazakhstan) countries="$countries -d${CTL}lbCountries=106";;
+	.ke|.ken|kenya) countries="$countries -d${CTL}lbCountries=107";;
+	.ki|.kir|kiribati) countries="$countries -d${CTL}lbCountries=109";;
+	.kw|.kwt|kuwait) countries="$countries -d${CTL}lbCountries=241";;
+	.kg|.kgz|kyrgyzstan) countries="$countries -d${CTL}lbCountries=108";;
+	.la|.lao|laos) countries="$countries -d${CTL}lbCountries=110";;
+	.lv|.lva|latvia) countries="$countries -d${CTL}lbCountries=111";;
+	.lb|.lbn|lebanon) countries="$countries -d${CTL}lbCountries=113";;
+	.ls|.lso|lesotho) countries="$countries -d${CTL}lbCountries=114";;
+	.lr|.lbr|liberia) countries="$countries -d${CTL}lbCountries=115";;
+	.ly|.lby|libya) countries="$countries -d${CTL}lbCountries=112";;
+	.li|.lie|liechtenstein) countries="$countries -d${CTL}lbCountries=116";;
+	.lt|.lyu|lithuania) countries="$countries -d${CTL}lbCountries=117";;
+	.lu|.lux|luxembourg) countries="$countries -d${CTL}lbCountries=8";;
+	.mo|.mac|macao) countries="$countries -d${CTL}lbCountries=258";;
+	.mk|.mkd|macedonia) countries="$countries -d${CTL}lbCountries=125";;
+	.mg|.mdg|madagascar) countries="$countries -d${CTL}lbCountries=119";;
+	.mw|.mwi|malawi) countries="$countries -d${CTL}lbCountries=129";;
+	.my|.mys|malaysia) countries="$countries -d${CTL}lbCountries=121";;
+	.mv|.mdv|maldives) countries="$countries -d${CTL}lbCountries=124";;
+	.ml|.mli|mali) countries="$countries -d${CTL}lbCountries=127";;
+	.mt|.mlt|malta) countries="$countries -d${CTL}lbCountries=128";;
+	.mh|.mhl|marshall\ islands) countries="$countries -d${CTL}lbCountries=240";;
+	.mq|.mtq|martinique) countries="$countries -d${CTL}lbCountries=122";;
+	.mr|.mrt|mauritania) countries="$countries -d${CTL}lbCountries=123";;
+	.mu|.mus|mauritius) countries="$countries -d${CTL}lbCountries=134";;
+	.yt|.myt|mayotte) countries="$countries -d${CTL}lbCountries=259";;
+	.mx|.mex|mexico) countries="$countries -d${CTL}lbCountries=228";;
+	.fm|.fsm|micronesia) countries="$countries -d${CTL}lbCountries=242";;
+	.md|.mda|moldova) countries="$countries -d${CTL}lbCountries=237";;
+	.mc|.mco|monaco) countries="$countries -d${CTL}lbCountries=130";;
+	.mn|.mng|mongolia) countries="$countries -d${CTL}lbCountries=131";;
+	.me|.mne|montenegro) countries="$countries -d${CTL}lbCountries=274";;
+	.ms|.msr|montserrat) countries="$countries -d${CTL}lbCountries=135";;
+	.ma|.mar|morocco) countries="$countries -d${CTL}lbCountries=132";;
+	.mz|.moz|mozambique) countries="$countries -d${CTL}lbCountries=133";;
+	.mm|.mmr|myanmar) countries="$countries -d${CTL}lbCountries=136";;
+	.na|.nam|namibia) countries="$countries -d${CTL}lbCountries=137";;
+	.nr|.nru|nauru) countries="$countries -d${CTL}lbCountries=138";;
+	.np|.npl|nepal) countries="$countries -d${CTL}lbCountries=140";;
+	.nl|.nld|netherlands) countries="$countries -d${CTL}lbCountries=141";;
+	.an|.ant|netherlands\ antilles) countries="$countries -d${CTL}lbCountries=148";;
+	.nc|.ncl|new\ caledonia) countries="$countries -d${CTL}lbCountries=41";;
+	.nz|.nzl|new\ zealand) countries="$countries -d${CTL}lbCountries=9";;
+	.ni|.nic|nicaragua) countries="$countries -d${CTL}lbCountries=144";;
+	.ne|.ner|niger) countries="$countries -d${CTL}lbCountries=143";;
+	.ng|.nga|nigeria) countries="$countries -d${CTL}lbCountries=145";;
+	.nu|.niu|niue) countries="$countries -d${CTL}lbCountries=149";;
+	.nf|.nfk|norfolk\ island) countries="$countries -d${CTL}lbCountries=260";;
+	.kp|.prk|north\ korea) countries="$countries -d${CTL}lbCountries=146";;
+	.mp|.mnp|northern\ mariana\ islands) countries="$countries -d${CTL}lbCountries=236";;
+	.no|.nor|norway) countries="$countries -d${CTL}lbCountries=147";;
+	.om|.omn|oman) countries="$countries -d${CTL}lbCountries=150";;
+	.pk|.pak|pakistan) countries="$countries -d${CTL}lbCountries=151";;
+	.pw|.plw|palau) countries="$countries -d${CTL}lbCountries=261";;
+	.ps|.pse|palestine) countries="$countries -d${CTL}lbCountries=276";;
+	.pa|.pan|panama) countries="$countries -d${CTL}lbCountries=152";;
+	.pg|.png|papua\ new\ guinea) countries="$countries -d${CTL}lbCountries=156";;
+	.py|.pry|paraguay) countries="$countries -d${CTL}lbCountries=262";;
+	.pe|.per|peru) countries="$countries -d${CTL}lbCountries=153";;
+	.ph|.phl|philippines) countries="$countries -d${CTL}lbCountries=154";;
+	.pn|.pcn|pitcairn) countries="$countries -d${CTL}lbCountries=155";;
+	.pl|.pol|poland) countries="$countries -d${CTL}lbCountries=158";;
+	.pt|.prt|portugal) countries="$countries -d${CTL}lbCountries=159";;
+	.pr|.pri|puerto\ rico) countries="$countries -d${CTL}lbCountries=226";;
+	.qa|.qat|qatar) countries="$countries -d${CTL}lbCountries=160";;
+	.re|.reu|reunion) countries="$countries -d${CTL}lbCountries=161";;
+	.ro|.rom|romania) countries="$countries -d${CTL}lbCountries=162";;
+	.ru|.rus|russia) countries="$countries -d${CTL}lbCountries=163";;
+	.rw|.rwa|rwanda) countries="$countries -d${CTL}lbCountries=164";;
+	.bl|.blm|saint\ barthelemy) countries="$countries -d${CTL}lbCountries=169";;
+	.sh|.shn|saint\ helena) countries="$countries -d${CTL}lbCountries=171";;
+	.kn|.kna|saint\ kitts\ and\ nevis) countries="$countries -d${CTL}lbCountries=264";;
+	.lc|.lca|saint\ lucia) countries="$countries -d${CTL}lbCountries=173";;
+	.mf|.maf|saint\ martin) countries="$countries -d${CTL}lbCountries=174";;
+	.pm|.spm|saint\ pierre\ and\ miquelon) countries="$countries -d${CTL}lbCountries=175";;
+	.vc|.vct|saint\ vincent\ and\ the\ grenadines) countries="$countries -d${CTL}lbCountries=177";;
+	.ws|.wsm|samoa) countries="$countries -d${CTL}lbCountries=217";;
+	.sm|.smr|san\ marino) countries="$countries -d${CTL}lbCountries=183";;
+	.st|.stp|sao\ tome\ and\ principe) countries="$countries -d${CTL}lbCountries=176";;
+	.gg|sark) countries="$countries -d${CTL}lbCountries=280";;
+	.sa|.sau|saudi\ arabia) countries="$countries -d${CTL}lbCountries=166";;
+	.sn|.sen|senegal) countries="$countries -d${CTL}lbCountries=167";;
+	.rs|.srb|serbia) countries="$countries -d${CTL}lbCountries=222";;
+	.sc|.syc|seychelles) countries="$countries -d${CTL}lbCountries=168";;
+	.sl|.sle|sierra\ leone) countries="$countries -d${CTL}lbCountries=178";;
+	.sg|.sgp|singapore) countries="$countries -d${CTL}lbCountries=179";;
+	.mf|.maf|sint\ maarten) countries="$countries -d${CTL}lbCountries=281";;
+	.sk|.svk|slovakia) countries="$countries -d${CTL}lbCountries=182";;
+	.si|.svn|slovenia) countries="$countries -d${CTL}lbCountries=181";;
+	.sb|.slb|solomon\ islands) countries="$countries -d${CTL}lbCountries=184";;
+	.so|.som|somalia) countries="$countries -d${CTL}lbCountries=185";;
+	.za|.zaf|south\ africa) countries="$countries -d${CTL}lbCountries=165";;
+	.gs|.sgs|south\ georgia\ and\ the\ south\ sandwich\ islands) countries="$countries -d${CTL}lbCountries=267";;
+	.kr|.kor|south\ korea) countries="$countries -d${CTL}lbCountries=180";;
+	.ss|.ssd|south\ sudan) countries="$countries -d${CTL}lbCountries=278";;
+	.es|.esp|spain) countries="$countries -d${CTL}lbCountries=186";;
+	.lk|.lka|sri\ lanka) countries="$countries -d${CTL}lbCountries=187";;
+	.sd|.sdn|sudan) countries="$countries -d${CTL}lbCountries=188";;
+	.sr|.sur|suriname) countries="$countries -d${CTL}lbCountries=189";;
+	.sj|.sjm|svalbard\ and\ jan\ mayen\ islands) countries="$countries -d${CTL}lbCountries=268";;
+	.sz|.swz|swaziland) countries="$countries -d${CTL}lbCountries=190";;
+	.se|.swe|sweden) countries="$countries -d${CTL}lbCountries=10";;
+	.ch|.che|switzerland) countries="$countries -d${CTL}lbCountries=192";;
+	.sy|.syr|syria) countries="$countries -d${CTL}lbCountries=193";;
+	.tw|.twn|taiwan) countries="$countries -d${CTL}lbCountries=194";;
+	.tj|.tjk|tajikistan) countries="$countries -d${CTL}lbCountries=195";;
+	.tz|.tza|tanzania) countries="$countries -d${CTL}lbCountries=196";;
+	.th|.tha|thailand) countries="$countries -d${CTL}lbCountries=198";;
+	.tl|.tls|timor-leste) countries="$countries -d${CTL}lbCountries=252";;
+	.tg|.tgo|togo) countries="$countries -d${CTL}lbCountries=200";;
+	.tk|.tkl|tokelau) countries="$countries -d${CTL}lbCountries=269";;
+	.to|.ton|tonga) countries="$countries -d${CTL}lbCountries=201";;
+	.tt|.tto|trinidad\ and\ tobago) countries="$countries -d${CTL}lbCountries=202";;
+	.tn|.tun|tunisia) countries="$countries -d${CTL}lbCountries=203";;
+	.tr|.tur|turkey) countries="$countries -d${CTL}lbCountries=204";;
+	.tm|.tkm|turkmenistan) countries="$countries -d${CTL}lbCountries=199";;
+	.tc|.tca|turks\ and\ caicos\ islands) countries="$countries -d${CTL}lbCountries=197";;
+	.tv|.tuv|tuvalu) countries="$countries -d${CTL}lbCountries=205";;
+	.ug|.uga|uganda) countries="$countries -d${CTL}lbCountries=208";;
+	.ua|.ukr|ukraine) countries="$countries -d${CTL}lbCountries=207";;
+	.ae|.are|united\ arab\ emirates) countries="$countries -d${CTL}lbCountries=206";;
+	.uk|.gbr|united\ kingdom) countries="$countries -d${CTL}lbCountries=11";;
+	.uy|.ury|uruguay) countries="$countries -d${CTL}lbCountries=210";;
+	.um|.umi|us\ minor\ outlying\ islands) countries="$countries -d${CTL}lbCountries=270";;
+	.vi|.vir|us\ virgin\ islands) countries="$countries -d${CTL}lbCountries=235";;
+	.uz|.uzb|uzbekistan) countries="$countries -d${CTL}lbCountries=211";;
+	.vu|.vut|vanuatu) countries="$countries -d${CTL}lbCountries=212";;
+	.va|.vat|vatican\ city\ state) countries="$countries -d${CTL}lbCountries=213";;
+	.ve|.ven|venezuela) countries="$countries -d${CTL}lbCountries=214";;
+	.vn|.vnm|vietnam) countries="$countries -d${CTL}lbCountries=215";;
+	.wf|.wlf|wallis\ and\ futuna\ islands) countries="$countries -d${CTL}lbCountries=218";;
+	.eh|.esh|western\ sahara) countries="$countries -d${CTL}lbCountries=271";;
+	.ye|.yem|yemen) countries="$countries -d${CTL}lbCountries=220";;
+	.zm|.zmb|zambia) countries="$countries -d${CTL}lbCountries=224";;
+	.zw|.zwe|zimbabwe) countries="$countries -d${CTL}lbCountries=225";;
+	    c[0-9]*)
+		code=` echo $arg | tr -c -d '[0-9]' `
+		countries="$states -d${CTL}lbCountries=$code"
+		;;
+	    s[0-9]*)
+		code=` echo $arg | tr -c -d '[0-9]' `
+		states="$states -d${CTL}lbStates=$code"
+		;;
+	    allstates)
+		((i=1))
+		while ((i<=63)); do
+		    states="$states -d${CTL}lbStates=$i"
+		    ((++i))
+		done
+		;;
+
+	    [gG][cC][0-9a-zA-Z][0-9a-zA-Z][0-9a-zA-Z][0-9a-zA-z]*)
+		Origin=rbOriginGC
+		tbGC="$1"
+		;;
+	    *)			ZIP=$1; Origin=rbPostalCode;;
+	    esac
+
+	    if [ "$countries" != "" ]; then
+		CountryState=rbCountries
+		Origin=rbOriginNone
+	    elif [ "$states" != "" ]; then
+		CountryState=rbStates
+		Origin=rbOriginNone
+	    fi
+	    shift
+	    ;;
+    0)
+	    # Use home lat/lon
+	    Origin=rbOriginWpt
+	    ;;
+    *)
+	    usage
+	    ;;
+    esac
+
+    if [ "$#" = 0 ]; then
+	break
+    fi
+done
+
+if [ "$outputEmail" != "" ]; then
+    outputTo=rbOutputEmail
+else
+    outputTo=rbOutputAccount
+fi
+
+#
+#	Validate diff/terr
+#
+valid_dt() {
+    value=$(echo -- "$2" | tr -d '[+\-]')
+    value=$(printf "%g" "$value")
+    case "$value" in
+    [1-5])	echo "$value";;
+    [1-4].5)	echo "$value";;
+    esac
+}
+
+case "$DIFF" in
+*+*)	ddDifficulty="%3E%3D"; diff_value=$(valid_dt difficulty "$DIFF");;
+*-*)	ddDifficulty="%3C%3D"; diff_value=$(valid_dt difficulty "$DIFF");;
+*)	ddDifficulty="%3D"; diff_value=$(valid_dt difficulty "$DIFF");;
+esac
+if [ "" = "$diff_value" ]; then
+    error "Illegal difficulty value '$DIFF'"
+fi
+
+case "$TERR" in
+*+*)	ddTerrain="%3E%3D"; terr_value=$(valid_dt terrain "$TERR");;
+*-*)	ddTerrain="%3C%3D"; terr_value=$(valid_dt terrain "$TERR");;
+*)	ddTerrain="%3D"; terr_value=$(valid_dt terrain "$TERR");;
+esac
+if [ "" = "$terr_value" ]; then
+    error "Illegal terrain value '$TERR'"
+fi
+
+#
+#	Fixup lat/lon into gc.com format
+#
+lat_ns=`awk -v n=$LAT 'BEGIN{ print (n<0) ? "-1" : "1" }'`
+lat_h=`awk -v n=$LAT 'BEGIN{ print (n<0) ? int(-n) : int(n) }'`
+lat_mmss=`awk -v n=$LAT 'BEGIN{ if (n<0) n=-n; printf "%06.3f\n", (n*60.0)%60 }' `
+lon_ew=`awk -v n=$LON 'BEGIN{ print (n<0) ? "-1" : "1" }'`
+lon_h=`awk -v n=$LON 'BEGIN{ print (n<0) ? int(-n) : int(n) }'`
+lon_mmss=`awk -v n=$LON 'BEGIN{ if (n<0) n=-n; printf "%06.3f\n", (n*60.0)%60 }' `
+
+#
+#	Figure out the time constraint
+#
+Placed=rbPlacedNone
+ddLastPlaced=WEEK
+timeStart="last week"
+timeEnd="today"
+case "$TIME" in
+none|"")	;;
+week)	Placed=rbPlacedLast; ddLastPlaced=WEEK;;
+month)	Placed=rbPlacedLast; ddLastPlaced=MONTH;;
+year)	Placed=rbPlacedLast; ddLastPlaced=YEAR;;
+-*)	Placed=rbPlacedBetween
+	timeStart=01/01/2000
+	timeEnd=`echo $TIME | sed 's/.*-//'`
+	;;
+*-)	Placed=rbPlacedBetween
+	timeStart=`echo $TIME | sed 's/-.*//'`
+	timeEnd=$($date -d "6 months" +%m/%d/%Y)
+	;;
+*-*)	Placed=rbPlacedBetween
+	timeStart=`echo $TIME | sed 's/-.*//'`
+	timeEnd=`echo $TIME | sed 's/.*-//'`
+	;;
+*)	error "Illegal date format '$TIME'";;
+esac
+
+DateTimeBegin_month=`$date -d "$timeStart" +"%m" | sed 's/^0//' `
+DateTimeBegin_day=`$date -d "$timeStart" +"%d" | sed 's/^0//' `
+DateTimeBegin_year=`$date -d "$timeStart" +"%Y" `
+DateTimeEnd_month=`$date -d "$timeEnd" +"%m" | sed 's/^0//' `
+DateTimeEnd_day=`$date -d "$timeEnd" +"%d" | sed 's/^0//' `
+DateTimeEnd_year=`$date -d "$timeEnd" +"%Y" `
+
+#
+# Clamp dates to range permitted by gc.com (else you get a PQ you can't remove)
+#
+CLAMP_MIN=2000
+CLAMP_MAX=2025
+if ((DateTimeBegin_year < $CLAMP_MIN)); then
+    DateTimeBegin_month=1
+    DateTimeBegin_day=1
+    DateTimeBegin_year=$CLAMP_MIN
+fi
+if ((DateTimeEnd_year > $CLAMP_MAX)); then
+    thisyear=`$date +"%Y"`
+    if [ $thisyear -gt $CLAMP_MAX ]; then
+	error "Clamp dates are old: $CLAMP_MAX vs. $thisyear"
+    fi
+    DateTimeEnd_month=12
+    DateTimeEnd_day=31
+    DateTimeEnd_year=$CLAMP_MAX
+fi
+
+#
+#	Login to gc.com
+#
+if [ "$DEBUG" -lt 3 ]; then
+    gc_login "$USERNAME" "$PASSWORD"
+fi
+
+#
+#	Post the pocket query form
+#
+#	If debug is on or if we are doing instant output, then
+#	don't set any days for the query so no email is sent.
+#
+#	rbRunOption
+#	1		Uncheck the day of the week after the query runs
+#	2		Run this query every week on the days checked
+#	3		Run this query once then delete it
+#
+if [ "$DEBUG" = 0 -a "$OUTFMT" = "" ]; then
+    days=`TZ=US/Pacific date "+-dcbDays%%3A%w=on"`
+    runonce="-d ${CTL}rbRunOption=1"
+
+    days=
+    days="$days -d${CTL}cbDays\$0=on"
+    days="$days -d${CTL}cbDays\$1=on"
+    days="$days -d${CTL}cbDays\$2=on"
+    days="$days -d${CTL}cbDays\$3=on"
+    days="$days -d${CTL}cbDays\$4=on"
+    days="$days -d${CTL}cbDays\$5=on"
+    days="$days -d${CTL}cbDays\$6=on"
+    runonce="-d ${CTL}rbRunOption=3"
+    days=`TZ=US/Pacific date "+-dcbDays%%3A%w=%w"`
+    runonce="-d ${CTL}rbRunOption=1"
+else
+    days=
+    runonce=
+fi
+
+REPLY=$TMP-reply.html; CRUFT="$CRUFT $REPLY"
+
+if [ "$DEBUG" -lt 3 ]; then
+    # Get viewstate
+    dbgcmd curl $CURL_OPTS -s -b $COOKIE_FILE -c $COOKIE_FILE -A "$UA" \
+	"$PQURL" > $REPLY
+
+    gc_getviewstate $REPLY
+    echo=
+else
+    echo=echo
+fi
+
+if grep -q '<p class="Warning">' $REPLY; then
+    msg=`grep '<p class="Warning">' $REPLY |
+	sed -e 's/.*<p class="Warning">//' -e 's/<.p>.*//' -e 's/<[^>]*>//g'
+	`
+    error "$msg"
+fi
+
+$echo dbgcmd curl $CURL_OPTS -L -s -b $COOKIE_FILE -c $COOKIE_FILE -A "$UA" \
+	$viewstate \
+	-d __EVENTVALIDATION="$__EVENTVALIDATION" \
+	-d "${CTL}tbName=$tbName" \
+	$days \
+	$runonce \
+	-d "${CTL}tbResults=$NUM" \
+	-d "${CTL}Type=$Type" \
+	$TYPES \
+	-d "${CTL}Container=$Container" \
+	$CONTS \
+	$THATS \
+	$ATTRS \
+	$cbDifficulty \
+	-d "${CTL}ddDifficulty=$ddDifficulty" \
+	-d "${CTL}ddDifficultyScore=$diff_value" \
+	$cbTerrain \
+	-d "${CTL}ddTerrain=$ddTerrain" \
+	-d "${CTL}ddTerrainScore=$terr_value" \
+	-d "${CTL}CountryState=$CountryState" \
+	$countries \
+	$states \
+	-d "${CTL}tbGC=$tbGC" \
+	-d "${CTL}tbPostalCode=$ZIP" \
+	-d "${CTL}Origin=$Origin" \
+	-d "${CTL}LatLong=1" \
+	-d "${CTL}LatLong%3A_selectNorthSouth=$lat_ns" \
+	-d "${CTL}LatLong%3A_inputLatDegs=$lat_h" \
+	-d "${CTL}LatLong%3A_inputLatMins=$lat_mmss" \
+	-d "${CTL}LatLong%3A_selectEastWest=$lon_ew" \
+	-d "${CTL}LatLong%3A_inputLongDegs=0$lon_h" \
+	-d "${CTL}LatLong%3A_inputLongMins=$lon_mmss" \
+	-d "${CTL}LatLong%3A_currentLatLongFormat=1" \
+	-d "${CTL}tbRadius=$RADIUS_NUM" \
+	-d "${CTL}rbUnitType=$RADIUS_UNITS" \
+	-d "${CTL}Placed=$Placed" \
+	-d "${CTL}ddLastPlaced=$ddLastPlaced" \
+	-d "${CTL}DateTimeBegin=$DateTimeBegin" \
+	-d "${CTL}DateTimeBegin%24Month=$DateTimeBegin_month" \
+	-d "${CTL}DateTimeBegin%24Day=$DateTimeBegin_day" \
+	-d "${CTL}DateTimeBegin%24Year=$DateTimeBegin_year" \
+	-d "${CTL}DateTimeEnd=$DateTimeEnd" \
+	-d "${CTL}DateTimeEnd%24Month=$DateTimeEnd_month" \
+	-d "${CTL}DateTimeEnd%24Day=$DateTimeEnd_day" \
+	-d "${CTL}DateTimeEnd%24Year=$DateTimeEnd_year" \
+	-d "${CTL}Output=$outputTo" \
+	-d "${CTL}ddlAltEmails=$outputEmail" \
+	-d "${CTL}ddFormats=GPX" \
+	$unzip \
+	-d "${CTL}btnSubmit=Submit+Information" \
+	-d "__EVENTTARGET=" \
+	-d "__EVENTARGUMENT=" \
+	"$PQURL" > $REPLY
+
+if [ "$DEBUG" -ge 3 ]; then
+    cat $REPLY
+    exit
+fi
+
+PQNUM=$(grep pq= $REPLY | sed -e 's/.*aspx?pq=//' -e 's/".*//')
+if [ "$OUTFMT" != "" ]; then
+    SEARCH="?pq=$PQNUM"
+    gc_query
+fi
+
+#
+#	If debug is off, spin off a process to delete this query
+#	after 20 minutes.
+#
+if [ "$DEBUG" = 0 -a $PQDELETE = 1 ]; then
+    # Get the new viewstate from the reply page
+    gc_getviewstate $REPLY
+
+    (
+	if [ "$OUTFMT" = "" ]; then
+	    sleep 1200
+	fi
+	curl $CURL_OPTS -s -b $COOKIE_FILE -c $COOKIE_FILE -A "$UA" \
+		$viewstate \
+		-d __EVENTVALIDATION="$__EVENTVALIDATION" \
+		-d "${CTL}btnDelete=Delete+This+Query" \
+		-d "__EVENTTARGET=" \
+		-d "__EVENTARGUMENT=" \
+		"$PQURL" > /dev/null
+    ) &
+    if [ "$WAIT" = 1 ]; then
+	wait
+    fi
+fi

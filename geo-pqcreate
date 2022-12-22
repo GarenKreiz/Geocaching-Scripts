@@ -1,0 +1,10 @@
+#!/bin/sh
+#
+# processes the output of Project-GC PQ Splitter command
+# create PQs on www.geocaching.com
+
+sed 's/^\([0-9]*\) \t\(.*\) \t\(.*\) \t.* \t.*/sh geo-demand -T \2-\3 -N PQ\1 -n 1000 -W france/g' | tee r1.txt | \
+    sed -f decodeMois.sed | \
+    tee resu.sh | \
+    sh -x
+

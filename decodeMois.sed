@@ -1,0 +1,12 @@
+s/Janvier/01/g
+s/F[^\/]*vrier/02/g
+s/Mars/03/g
+s/Avril/04/g
+s/Mai/O5/g
+s/Juin/06/g
+s/Juillet/07/g
+s/Ao[^\/]*t/08/g
+s/Septembre/09/g
+s/Octobre/10/g
+s/Novembre/11/g
+s/D[^\/]*cembre/12/g
