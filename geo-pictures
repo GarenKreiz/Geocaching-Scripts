@@ -1,14 +1,12 @@
 #!/bin/bash
 #
-#       geo-pockets : modification of geo-found by garenkreiz
+#       geo-pictures (modification of geo-found by garenkreiz)
 #
-#       activation or desactivation of pocket queries
+#       add pictures to geocaching logs
 #
 #       syntax:
-#           activating a list of PQs (separated by :)
-#               geo-pockets -n <day-of-week> -q <list-of-PQ-names>
-#           desactivating
-#               geo-pockets -d -n <day-of-week> -q <list-of-PQ-names> 
+#               geo-pictures -f <list-of-pictures.txt>
+
 #  
 #	DO NOT EDIT! This file is generated from geo-found.sh
 #
@@ -29,34 +27,31 @@ PROGNAME="$0"
 usage() {
 	cat <<EOF
 NAME
-    `basename $PROGNAME` - Activate/desactivate a list of pocket queries for a given day
+    `basename $PROGNAME` - Add pictures to geocaching logs
 
 SYNOPSIS
-    `basename $PROGNAME` [-d] -n <day-of-week> -q <list-of-pocket-queries>
+    `basename $PROGNAME` -n <list-of-pictures.txt> 
 
 DESCRIPTION
-    Activate or desactivate a list of pocket queries for a given day in a week.
-    The list is a concatenation of the queries' names separated colons (":")
+    Add pictures to geocaching logs, setting the correct date
 
     Requires:
-        A premium member login at:
+        A member login at:
 	     http://www.geocaching.com
 
 	curl		http://curl.haxx.se/
-	gpsbabel	http://gpsbabel.sourceforge.net/
-
 EOF
     gc_usage
     cat << EOF
 
 EXAMPLES
-    Activate pocket query PQ001 on Monday
 
-	geo-pockets -n 2 -q PQ001
+    The <list-of-pictures.txt> file should contains multiple lines 
+    
+    <YYYY/MM/DD>|<long-log-LUID>|<filename-of-image>|<caption>|<description>
+    2016/11/20|a5b97a41-1722-442d-81a1-26166e9b7470|GC/SmallBlog/2016_1120_121859AA.jpg|Stade en travaux|
 
-    Desactivate pocket queries PQ001:PQ002 on Sunday
-
-	geo-pockets -n 1 -d -q PQ001:PQ002
+    The pictures are associated to log in the same order as the lines in the file
 
 FILES
     ~/.georc
@@ -68,7 +63,6 @@ EOF
 
 	exit 1
 }
-
 ##############################################################################
 # begin #include "geo-common"
 ##############################################################################
@@ -133,7 +127,7 @@ remove_cruft() {
 	fi
 }
 
-# trap remove_cruft EXIT
+trap remove_cruft EXIT
 
 #
 # Convert DegDec, MinDec, or DMS lat/lon to DegDec
@@ -181,7 +175,7 @@ degdec2mindec() {
 	    printf "%d.%06.3f\n", i, abs(v-i) * 60
 	else
 	    printf "%s%d.%06.3f\n", \
-		(i >= 0.0) ? substr(sym, 1, 1) : substr(sym, 2, 1), \
+		(v >= 0.0) ? substr(sym, 1, 1) : substr(sym, 2, 1), \
 		abs(i), abs(v-i) * 60
     }'
 }
@@ -274,6 +268,12 @@ get_value() {
     what=$1
     where=$2
     eval $what=`$sed -n "s/^.*\"$what\" *value=\"\([^\"]*\)\".*/\1/p" < $where`
+}
+get_hidden_value() {
+    # <input type="hidden" name="__EVENTTARGET" value=""
+    what=$1
+    where=$2
+    eval $what=`$sed -n "s/^.*\"$what\" *type=\"hidden\" *value=\"\([^\"]*\)\".*/\1/p" < $where`
 }
 
 #
@@ -418,7 +418,7 @@ process_latlon() {
 ##############################################################################
 # begin #include "geo-common-gc"
 # 
-# $Id: geo-common-gc,v 1.344 2016/07/11 18:47:30 rick Exp $
+# $Id: geo-common-gc,v 1.349 2017/03/08 19:36:00 rick Exp $
 ##############################################################################
 
 #
@@ -553,26 +553,106 @@ gc_getopts() {
     CMDPIPE=
     BOOKMARK=
     POCKETQUERY=
-    FILEPICTURE=
-    LOGID=
-    CAPTIONPICTURE=
-    DATEPICTURE=
-    LISTPICTURES=
 
-    while getopts "D:p:l:c:d:f:" opt
+    while getopts "!:E:H:L:I:X:b:q:cdfFmM:n:o:O:p:Pr:sSt:u:D:Uh?-" opt
     do
 	case $opt in
-	    f)      LISTPICTURES="$OPTARG";;
-	    p)      FILEPICTURE="$OPTARG";;
-	    l)      LOGID="$OPTARG";;
-	    c)      CAPTIONPICTURE="$OPTARG";;
-	    d)      DATEPICTURE="$OPTARG";;
-	    D)	    DEBUG="$OPTARG";;
-	    h|\?|-) usage;;
+	"!")	CMDPIPE="$OPTARG";;
+	b)	BOOKMARK="$OPTARG";;
+	q)	POCKETQUERY="$OPTARG";;
+	c)	NOCOOKIES=1;;
+	d)	DELETE=1;;
+	E)	eval "$OPTARG";;
+	f)	FOUND=0; EXCLUDE="$EXCLUDE|-ifound";;
+	m)	SOC=0;;
+	M)	GEOMYSTERY="$OPTARG";;
+	I)
+		if [ "$INCLUDE" = "*" ]; then
+		    INCLUDE=
+		else
+		    INCLUDE="$INCLUDE|"
+		fi
+		INCLUDE="$INCLUDE-$OPTARG"
+		;;
+	X)
+		if [ "" = "$OPTARG" -o "~"  = "$OPTARG" ]; then
+		    EXCLUDE=-ExClUdEnOtHiNg
+		else
+		    EXCLUDE="$EXCLUDE|-$OPTARG"
+		fi
+		;;
+	F)	USERFOUND=0;;
+	P)	PURGE=1;;
+	n)	NUM="$OPTARG"
+		case "$NUM" in
+		[0-9]*)	;;
+		*)	error "Not a number: '$NUM'";;
+		esac
+		if [ "$NUM" -lt 1 -o "$NUM" -gt 999999 ]; then
+		    error "NUM is not between 1 and 999999 ($NUM)"
+		fi
+		;;
+	r)	RADIUS="$OPTARG"
+		RADIUS_NUM=`awk -v "N=$RADIUS" 'BEGIN{printf "%d\n", N}'`
+		case "$RADIUS" in
+		*km*|*KM*)
+		    RADIUS_UNITS=km
+		    RADIUS_MILES=`dc -e "6k $RADIUS_NUM 1.609344/p" `
+		    ;;
+		*)
+		    RADIUS_MILES=$RADIUS_NUM
+		    RADIUS_UNITS=mi
+		    ;;
+		esac
+		;;
+	s)	BABELFLAGS="$BABELFLAGS -s"; GEONUKE=",nuke_placer";;
+	S)      OUTFMT="gpsdrive.sql";;
+	t)	SQLTAG="$OPTARG";;
+	u)	USERNAME="$OPTARG";;
+	p)	PASSWORD="$OPTARG";;
+	o)	OUTFMT="$OPTARG";;
+	O)	OUTFILE="$OPTARG";;
+	H)	HTMLDIR="$OPTARG";;
+	L)	LOGDIR="$OPTARG";;
+	D)	DEBUG="$OPTARG";;
+	U)	echo "Getting latest version of this script..."
+		curl $CURL_OPTS -o$UPDATE_FILE "$UPDATE_URL"
+		chmod +x "$UPDATE_FILE"
+		echo "Latest version is in $UPDATE_FILE"
+		exit
+		;;
+	h|\?|-)	usage;;
 	esac
     done
+    
     shiftamt=`expr $OPTIND - 1`
     shift $shiftamt
+
+    case "$SOC" in
+    0)	EXCLUDE="$EXCLUDE|-soc";;
+    esac
+
+    case "$OUTFMT" in
+    map)
+	OUTFMT=tiger,newmarker=grnpin,iconismarker
+	MAP=1
+	;;
+    map,*)
+	MAPOPTS=`echo "$OUTFMT" | $sed -n 's/map,\(.*\)$/\1/p'`
+	OUTFMT=tiger,newmarker=grnpin,iconismarker
+	MAP=1
+	;;
+
+    gpsdrive.sql)
+	OUTFMT=gpsdrive
+	SQL=1
+	# DEBUG=1
+	;;
+    \?)
+	gpsbabel_formats
+	exit
+	;;
+    esac
 
     LOGUSERNAME="$USERNAME"
     return $shiftamt
@@ -588,7 +668,6 @@ gc_getviewstate() {
     get_value __VIEWSTATEFIELDCOUNT $file
     get_value __VIEWSTATE $file; __VIEWSTATE=`urlencode "$__VIEWSTATE"`
     get_value __EVENTVALIDATION $file;
-    get_value __VIEWSTATEGENERATOR $file;
 	__EVENTVALIDATION=`urlencode "$__EVENTVALIDATION"`
     viewstate=
     viewstate="$viewstate -d __VIEWSTATE=$__VIEWSTATE"
@@ -625,16 +704,20 @@ gc_login() {
     CRUFT="$CRUFT $LOGINPAGE"
 
     URL="$GEOS/login/default.aspx"
+    URL="$GEOS/account/login"
+    URL="$GEOS/account/signin"
     debug 1 "curl $CURL_OPTS $URL"
     curl $CURL_OPTS -s -A "$UA" -c$COOKIE_FILE \
-	-e "$URL;auto" \
+	-e "$URL" \
 	-o $LOGINPAGE "$URL"
     [ -s $LOGINPAGE ] \
 	|| error "Unable to connect to gc.com; Try: CURL_OPTS=\"--sslv3\" in ~/.georc"
-    get_value __VIEWSTATE $LOGINPAGE
-    __VIEWSTATE=`urlencode "$__VIEWSTATE"`
-    get_value __EVENTVALIDATION $LOGINPAGE
-    __EVENTVALIDATION=`urlencode "$__EVENTVALIDATION"`
+    #get_value __VIEWSTATE $LOGINPAGE
+    #__VIEWSTATE=`urlencode "$__VIEWSTATE"`
+    #get_value __EVENTVALIDATION $LOGINPAGE
+    #__EVENTVALIDATION=`urlencode "$__EVENTVALIDATION"`
+    get_hidden_value __RequestVerificationToken $LOGINPAGE
+    __RequestVerificationToken=`urlencode "$__RequestVerificationToken"`
 
     sleep 2
 
@@ -642,30 +725,32 @@ gc_login() {
     #	Now post the login
     #
     URL="$GEOS/login/default.aspx"
-    #URL="$URL?RESET=Y"
+    URL="$GEOS/account/login"
+    URL="$GEOS/account/signin"
     #
     # RER 05/05/12: bug in recent curl/openssl use "--sslv3" for a workaround
     debug 1 "curl $URL"
     dbgcmd curl $CURL_OPTS -s -A "$UA" -b$COOKIE_FILE -c$COOKIE_FILE \
-	-d __VIEWSTATE="$__VIEWSTATE" \
-	-d __EVENTVALIDATION="$__EVENTVALIDATION" \
-	-e "$URL;auto" \
-	-dctl00%24ContentBody%24tbUsername="$_username" \
-	-dctl00%24ContentBody%24tbPassword="$_password" \
-	-dctl00%24ContentBody%24btnSignIn="Sign In" \
+	-e "$URL" \
+	-d__RequestVerificationToken="$__RequestVerificationToken" \
+	-dUsernameOrEmail="$_username" \
+	-dPassword="$_password" \
 	-L "$URL" > $LOGINPAGE
     if [ ! -s $LOGINPAGE ]; then
 	error "curl: returned /dev/null for '$LOGINPAGE'"
     fi
-    if grep -q "FormErrorWidget" $LOGINPAGE; then
-	error "Login username/password does not match."
+    if grep -q "validation-summary-errors" $LOGINPAGE; then
+	msg=`grep validation-summary-errors $LOGINPAGE |
+	    sed -e 's/.*validation-summary-errors.><ul><li>//' -e 's/<.*//'`
+	error "$msg"
     fi 
     if grep -q "If you are human" $LOGINPAGE; then
 	error "Have to login this time with a web browser because of Recaptcha"
     fi 
-    if grep -q "temporarily down for maintenance." $LOGINPAGE; then
+    if grep -q "doing a bit of scheduled maintenance right now" $LOGINPAGE; then
 	error "Geocaching.com is temporarily down for maintenance."
     fi 
+    return
     # Make case insignificant
     if ! grep -y -q "ctl00_ContentBody_LoggedInPanel" $LOGINPAGE; then
 	error "BUG: gc.com changed the login page."
@@ -1424,7 +1509,6 @@ gc_fetch_cache_page(){
     return 0
 }
 
-
 #
 #	Query the gc website
 #
@@ -1706,7 +1790,7 @@ gc_query() {
 			# cache page doesn't exist or out of date
 			sleep 3 #$GEOSLEEP
 
-			urlpage="http://www.geocaching.com"
+			urlpage="https://www.geocaching.com"
 			urlpage="$urlpage/seek/cache_details.aspx"
 			urlpage="$urlpage?log=y&wp=$gcid"
 			gc_fetch_cache_page $cachepage $gcid $urlpage \
@@ -1758,9 +1842,9 @@ gc_query() {
 
 		    echo "<waypoint>"
 		    echo "<name id=\"$gcid\"><![CDATA[$name]]></name>"
-		    grep "lnkConversions" $cachepage \
+		    grep 'ContentBody_Location"' $cachepage  \
 			| $sed -e 's/.*lat=/<coord lat="/' \
-			    -e 's/&amp;lon=/" lon="/' -e 's@&.*@"/>@'
+                            -e 's/&lng=/" lon="/' -e 's@&.*@"/>@'
 		    echo "<type>Geocache</type>"
 		    printf "<link text=\"Cache Details\">"
 		    urlpage="http://www.geocaching.com"
@@ -1800,8 +1884,9 @@ gc_query() {
 	# grep "Records: <b>[1-9].*disabled.><b>Next<" $HTMLPAGE
 	# if grep -s -q "Records: <b>[1-9].*disabled.><b>Next " $HTMLPAGE; then
 	# RER: 05/26/13 changed... works with any language!
+	# RER: 10/16/16 changed... disabled is Disabled
 	if grep -s -q \
-	    "<span>[^:]*: <b>[0-9]\+</b>.*disabled.><b>[^<]*</b></a></td>" \
+	"<span>[^:]*: <b>[0-9]\+</b>.*[nN]et[dD]isabled.><b>[^<]*</b></a></td>" \
 	    $HTMLPAGE; then
 	    # echo "$start: dis"
 	    break;
@@ -2252,9 +2337,8 @@ gpsbabel_formats() {
 #
 #       Set default options, can be overriden on command line or in rc file
 #
-UPDATE_URL=$WEBHOME/geo-found
-UPDATE_FILE=geo-found.new
-EXCLUDE='_NoThInG_'	# Make more sense to not exclude unavails for this query
+UPDATE_URL=$WEBHOME/geo-pictures
+UPDATE_FILE=geo-pictures.new
 
 read_rc_file
 
@@ -2263,18 +2347,35 @@ read_rc_file
 #
 BYUSER="$USERNAME"
 
-gc_getopts "$@"
-shift $?
+while getopts "f:h?-" opt
+do
+    case $opt in
+	f)      LISTPICTURES="$OPTARG";;
+	h|\?|-) usage;;
+    esac
+done
+if [ "$LISTPICTURES" == "" ] ; then
+    LOGID="$1"
+    FILEPICTURE="$2"
+    CAPTIONPICTURE="$3"
+    DATEPICTURE="$4"
+    DESCRIPTIONPICTURE="$5"    
+fi
+shift `expr $OPTIND - 1`
 
+DBGCMD_LVL=2
+if [ $DEBUG -gt 0 ]; then
+    TMP=/tmp/geo
+else
+    TMP=/tmp/geo$$
+fi
+if [ $NOCOOKIES = 1 ]; then
+    CRUFT="$CRUFT $COOKIE_FILE"
+fi
 
 #
 #	Main Program
 #
-
-case "$#" in
-0)	;;
-*)	usage;;
-esac
 
 LOGUSERNAME="$BYUSER"
 byuser=`urlencode "$BYUSER" | tr ' ' '+' `
@@ -2287,20 +2388,20 @@ fi
 # upload an image with title and set the date
 #
 upload_image() {
-
     FILEPICTURE="$1"
     CAPTIONPICTURE="$2"
     DATEPICTURE="$3"
-    DESCRIPTIONPICTURE="$4"
+    DESCRIPTIONPICTURE="$4"    
 
-    
     echo ==== Uploading image $FILEPICTURE $CAPTIONPICTURE $DATEPICTURE
 
     get_value __VIEWSTATE $HTMLPAGE
-    echo $__VIEWSTATE
+
+    ID=$RANDOM
     
+    echo ==== Upload $URL in $ID
     curl $CURL_OPTS -L -s -b $COOKIE_FILE -A "$UA" \
-	-v --trace trace_upload.txt \
+	-v --trace trace_upload_$ID.txt \
 	-F "__EVENTTARGET=" \
 	-F "__EVENTARGUMENT=" \
 	-F "__VIEWSTATE=$__VIEWSTATE" \
@@ -2311,49 +2412,58 @@ upload_image() {
 	-F "ctl00\$ContentBody\$ImageUploadControl1\$uxUpload=Upload" \
         "$URL" > $HTMLPAGE
 
-    cp $HTMLPAGE geo_upload_$RANDOM.html
-    cp $COOKIE_FILE cookie_upload_$RANDOM
+    cp $HTMLPAGE geo_upload_$ID.html
+    gc_getviewstate $HTMLPAGE
+    sleep 1
+    
+    if ! grep -y -q "_ImageUploadControl" $HTMLPAGE; then
+	error "Error after uploading an image"
+    fi 
+    
     
     # https://www.geocaching.com/seek/limage.aspx?imgid=36123418&LID=648267239
     URL=`grep uxEditImg $HTMLPAGE | sed 's/.*href="//' | sed 's/">.*//' | sed 's/.amp;/\&/'`
 
-    echo ====== "Modify:" $URL
-    
-    curl $CURL_OPTS -L -s -b $COOKIE_FILE -A "$UA" \
-	-v --trace trace_modify_image.txt \
-	"$URL" > $HTMLPAGE
-    
-    cp $HTMLPAGE geo_modify_image_$RANDOM.html
-    cp $COOKIE_FILE cookie_modify_image_$RANDOM
+    echo ==== Modify image $URL in $ID
 
-    echo ==== Editing image
-  
-    gc_getviewstate $HTMLPAGE
-    #print "Viewstate=" $viewstate
-    sleep 2
     curl $CURL_OPTS -L -s -b $COOKIE_FILE -A "$UA" \
-	 -v --trace trace_modify_details.txt \
+	-v --trace trace_modify_image_$ID.txt \
+	"$URL" > $HTMLPAGE
+
+    cp $HTMLPAGE geo_modify_image_$ID.html
+    gc_getviewstate $HTMLPAGE
+    sleep 1
+    
+    if ! grep -y -q "_lbHeading" $HTMLPAGE; then
+	error "Error after uploading an image"
+    fi 
+    
+
+    echo ==== Modify details $URL in $ID
+
+    curl $CURL_OPTS -L -s -b $COOKIE_FILE -A "$UA" \
+	 -v --trace trace_modify_details_$ID.txt \
     	 $viewstate \
 	 -d "__VIEWSTATEGENERATOR=$__VIEWSTATEGENERATOR" \
 	 -d "__EVENTTARGET=ctl00\$ContentBody\$ImageEditPanel1\$btnEditTxt" \
 	 -d "__EVENTARGUMENT=" \
 	"$URL" > $HTMLPAGE
 
-    cp $HTMLPAGE geo_modify_details_$RANDOM.html
-    cp $COOKIE_FILE cookie_modify_details_$RANDOM
-
-    echo ==== Sending form
-  
+    cp $HTMLPAGE geo_modify_details_$ID.html
     gc_getviewstate $HTMLPAGE
-    #print "Viewstate=" $viewstate
-    sleep 2
+    sleep 1
+    
+    if ! grep -y -q "_lbHeading" $HTMLPAGE; then
+	error "Error after modifying details"
+    fi 
 
-    echo ============ $DATEPICTURE
+    echo ==== Sending form $URL
+  
+    echo ==== Date $DATEPICTURE
     setDate=`echo $DATEPICTURE | sed 's,\(....\)/\(..\)/\(..\),Year=\1 ; Month=\2 ; Day=\3,'`
     eval $setDate
-    echo $Year $Month $Day
     curl $CURL_OPTS -L -s -b $COOKIE_FILE -A "$UA" \
-	 -v --trace trace_form.txt \
+	 -v --trace trace_sending_form_$ID.txt \
 	 -d "__EVENTTARGET=" \
 	 -d "__EVENTARGUMENT=" \
 	 -d "__LASTFOCUS=" \
@@ -2368,9 +2478,12 @@ upload_image() {
 	 -d "ctl00\$ContentBody\$ImageEditPanel1\$btnEdit=Modifier+les+détails" \
 	"$URL" > $HTMLPAGE
 
-    cp $HTMLPAGE geo_form_$RANDOM.html
-    cp $COOKIE_FILE cookie_form_$RANDOM
+    cp $HTMLPAGE geo_sending_form_$ID.html
+    sleep 1
     
+    if ! grep -y -q "_lbHeading" $HTMLPAGE; then
+	error "Error after uploading an image"
+    fi 
 }
 
 #
@@ -2381,76 +2494,55 @@ goto_log() {
     # Fetch the page of a log 
     #
 
-    echo "==== Uploading for log" $1
     LOGID="$1"
     
     URL="$GEO/seek/log.aspx?LUID=$LOGID"
 
+    echo ==== Seeking log $1 $URL
+
     debug 1 "$start: curl $URL "
 
-
+    ID=$RANDOM
     curl $CURL_OPTS -L -s -b $COOKIE_FILE -A "$UA" \
+	 -v --trace trace_seeking_log_$ID.txt \
         "$URL" \
         | $sed -e "s/&#39;/'/g" -e "s/\r//" > $HTMLPAGE
 
-    if [ "$DEBUG" -ge 1 ]; then
-        grep "from you home location" $HTMLPAGE 
-    fi
+    cp $HTMLPAGE geo_seeking_log_$ID.html
+    gc_getviewstate $HTMLPAGE
     
-    if [ "$DEBUG" -ge 1 ]; then
-        grep "Total Records:.*Top.*" $HTMLPAGE |
-        sed -e "s/<.b>.*//" -e "s/^.*span>//" -e "s/<b>//" 1>&2
-    fi
-    
-    rc=$?; if [ $rc != 0 ]; then
-        error "curl: fetch $URL"
-    fi
-    if grep -s -q "We encountered an error when requesting that page!" \
-        $HTMLPAGE; then
-        error "searching error (1) on $start"
-    fi
-    if grep -s -q "has resulted in an error" \
-        $HTMLPAGE; then
-        error "searching error (2) on $start"
-    fi
-    if grep -s -q "By State" $HTMLPAGE; then
-        error "searching gave up on $start"
-    fi
-    if grep -s -q ">Advanced Search<" $HTMLPAGE; then
-        error "need a country AND a state!"
-    fi
+    if ! grep -y -q "_lbHeading" $HTMLPAGE; then
+	error "Log page not found"
+    fi 
 
     #
     # Grab a few important values from the page
     #
-    # 
-    # gc_getviewstate $HTMLPAGE
+
     
-    # cp $HTMLPAGE /tmp/view$start.html
-
-    cp $HTMLPAGE geo_$RANDOM.html
-    cp $COOKIE_FILE cookie_$RANDOM
-
     LID=`grep "seek/upload.aspx?LID" $HTMLPAGE | sed 's,.*seek/upload.aspx,seek/upload.aspx,' | sed 's/".*//'` 
-
-    echo $LID
+    
+    echo ==== Uploading for log $LID
     
     URL="$GEOS/$LID"
-
+    
     debug 1 "$start: curl $URL "
 
+    ID=$RANDOM
+    echo ==== Log $LID $URL in $ID
+    
     curl $CURL_OPTS -L -s -b $COOKIE_FILE -A "$UA" -v \
+	 -v --trace trace_log_$ID.txt \
         "$URL" \
         | $sed -e "s/&#39;/'/g" -e "s/\r//" > $HTMLPAGE
 
-    cp $HTMLPAGE geo_log_$RANDOM.html
-    cp $COOKIE_FILE cookie_log_$RANDOM
-
-    sleep 2
+    if ! grep -y -q "_ImageUploadControl" $HTMLPAGE; then
+	error "Error on upload image page"
+    fi 
+    
+    cp $HTMLPAGE geo_log_$ID.html
     gc_getviewstate $HTMLPAGE
-
-    echo $__VIEWSTATEGENERATOR
-
+    sleep 1
 }
 
 process_file() {
@@ -2458,22 +2550,20 @@ process_file() {
     echo "==== Processing file" $1
     cp $1 listeImages_$RANDOM.txt
     LOGID="__DUMMY__"
-    cat $1 | \
+    grep "|" $1 | \
 	while read i ; do
 	    D=""
-	    evalString=`echo $i | sed 's/\(.*\)|\(.*\)|\(.*\)|\(.*\)|\(.*\)/D="\1" ; L="\2" ; P="\3" ; C="\4" ; DD="\5" ;/'`
-	    echo $evalString
+
+	    # read Day LogID, Path Caption Text
+	    evalString=`echo $i | sed 's/"/\\\\"/g' | sed 's/\(.*\)|\(.*\)|\(.*\)|\(.*\)|\(.*\)/D="\1" ; L="\2" ; P="\3" ; C="\4" ; T="\5" ;/'`
 	    eval $evalString
 	    if [ "$D" = "" ] ; then
 		exit
 	    fi
-	    #if [ "$L" != "$LOGID" ] ; then
-	    #	LOGID=$L
-	    #	goto_log "$LOGID"		
-	    #fi
+
 	    goto_log "$L"
 	    
-	    test -f "$P" && upload_image "$P" "$C" "$D" "$DD"
+	    test -f "$P" && upload_image "$P" "$C" "$D" "$D"
 
 	done
 }
@@ -2481,7 +2571,8 @@ process_file() {
 #	Upload pictures
 #
 upload_pictures() {
-    echo ==== Uploading picture $FILEPICTURES $LOGID $FILEPICTURE $CAPTIONPICTURE $DATEPICTURE
+    echo ==== Uploading pictures $FILEPICTURES $LOGID $FILEPICTURE $CAPTIONPICTURE $DATEPICTURE
+    echo ==== Uploading pictures $*
 
     if [ $DEBUG -gt 0 ]; then
 	TMP=/tmp/geo
@@ -2519,9 +2610,7 @@ upload_pictures() {
     fi
 
 
-    #
-    #	Login to gc.com
-    #
+    echo ==== Login to gc.com
     gc_login "$USERNAME" "$PASSWORD"
 
     if [ $DEBUG -gt 0 ]; then
@@ -2535,17 +2624,17 @@ upload_pictures() {
     > $ARCHFILE
     ((start=0))
 
-    sleep $GEOSLEEP
-
-    echo ========= $LISTPICTURES
+    echo ==== $LISTPICTURES
     if [ "$LISTPICTURES" != "" ] ; then
 
-	echo === Processing $LISTPICTURES
+	echo ==== Processing $LISTPICTURES
 	test -f $LISTPICTURES || (echo "No file " $LISTPICTURES ; exit )
  	process_file $LISTPICTURES			       
 	exit
     fi		  
-				       
+
+    # upload individual image
+    echo "Uploading single image " $LOGID "-" $FILEPICTURE "-" "$CAPTIONPICTURE" "-" "$DATEPICTURE" "-" "" 
     goto_log "$LOGID"
     upload_image "$FILEPICTURE" "$CAPTIONPICTURE" "$DATEPICTURE" "" 
 }
